@@ -41,6 +41,7 @@ const Index = () => {
   const [accuracyHistory, setAccuracyHistory] = useState<AccuracyPoint[]>([]);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
   const [captureStream, setCaptureStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -334,7 +335,7 @@ const Index = () => {
   }, [isCapturing, history]);
 
   useEffect(() => {
-    if (isPaused) return;
+    if (isPaused || !isRunning) return;
 
     const timer = setInterval(() => {
       setTimeLeft(prev => {
@@ -368,7 +369,7 @@ const Index = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isCapturing, isPaused, previousPrediction]);
+  }, [isCapturing, isPaused, isRunning, previousPrediction]);
 
   useEffect(() => {
     if (history.length > 0) {
@@ -392,6 +393,27 @@ const Index = () => {
     }
   }, [history]);
 
+  const handleStart = () => {
+    setIsRunning(true);
+    setIsPaused(false);
+    setTimeLeft(30);
+    
+    toast({
+      title: "Система запущена",
+      description: "Начинается отслеживание SUCCESS",
+    });
+  };
+
+  const handleStop = () => {
+    setIsRunning(false);
+    setIsPaused(false);
+    
+    toast({
+      title: "Система остановлена",
+      description: "Отслеживание приостановлено",
+    });
+  };
+
   const handleReset = () => {
     setHistory([]);
     setCurrentSuccess(null);
@@ -402,6 +424,7 @@ const Index = () => {
     setLastPredictionResult(null);
     setAccuracyHistory([]);
     setIsPaused(false);
+    setIsRunning(false);
     
     toast({
       title: "Система сброшена",
@@ -410,6 +433,15 @@ const Index = () => {
   };
 
   const handlePauseResume = () => {
+    if (!isRunning) {
+      toast({
+        title: "Сначала запустите систему",
+        description: "Нажмите кнопку 'Начать'",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     setIsPaused(prev => !prev);
     
     toast({
@@ -492,13 +524,32 @@ const Index = () => {
         </div>
 
         <div className="flex gap-3 justify-center flex-wrap">
+          {!isRunning ? (
+            <Button
+              onClick={handleStart}
+              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:opacity-90 text-white text-lg px-8 py-6"
+            >
+              <Icon name="Play" size={24} className="mr-2" />
+              Начать
+            </Button>
+          ) : (
+            <Button
+              onClick={handleStop}
+              className="bg-gradient-to-r from-red-500 to-red-600 hover:opacity-90 text-white text-lg px-8 py-6"
+            >
+              <Icon name="Square" size={24} className="mr-2" />
+              Стоп
+            </Button>
+          )}
+
           <Button
             onClick={isCapturing ? stopScreenCapture : startScreenCapture}
+            disabled={!isRunning}
             className={`${
               isCapturing 
                 ? 'bg-red-500 hover:bg-red-600' 
                 : 'bg-gradient-to-r from-[#8B5CF6] to-[#0EA5E9] hover:opacity-90'
-            }`}
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             <Icon name={isCapturing ? "StopCircle" : "Monitor"} size={20} className="mr-2" />
             {isCapturing ? 'Остановить захват' : 'Начать захват экрана'}
@@ -507,7 +558,8 @@ const Index = () => {
           <Button
             onClick={handlePauseResume}
             variant="outline"
-            className="border-yellow-500 text-yellow-400 hover:bg-yellow-500/10"
+            className="border-yellow-500 text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!isRunning}
           >
             <Icon name={isPaused ? "Play" : "Pause"} size={20} className="mr-2" />
             {isPaused ? 'Возобновить' : 'Пауза'}
@@ -543,11 +595,38 @@ const Index = () => {
           </Card>
         )}
 
+        {!isRunning && history.length === 0 && (
+          <Card className="bg-blue-500/10 border-blue-500/30 p-4">
+            <div className="flex items-center gap-3">
+              <Icon name="Info" size={20} className="text-blue-400" />
+              <span className="text-blue-400 font-semibold">Нажмите кнопку "Начать" для запуска системы прогнозирования</span>
+            </div>
+          </Card>
+        )}
+
+        {isRunning && !isPaused && (
+          <Card className="bg-green-500/10 border-green-500/30 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-green-400 font-semibold">Система работает - отслеживание активно</span>
+            </div>
+          </Card>
+        )}
+
         {isPaused && (
           <Card className="bg-yellow-500/10 border-yellow-500/30 p-4">
             <div className="flex items-center gap-3">
               <Icon name="Pause" size={20} className="text-yellow-400" />
               <span className="text-yellow-400 font-semibold">Система на паузе - таймер остановлен</span>
+            </div>
+          </Card>
+        )}
+
+        {!isRunning && history.length > 0 && (
+          <Card className="bg-orange-500/10 border-orange-500/30 p-4">
+            <div className="flex items-center gap-3">
+              <Icon name="AlertCircle" size={20} className="text-orange-400" />
+              <span className="text-orange-400 font-semibold">Система остановлена - нажмите "Начать" для продолжения</span>
             </div>
           </Card>
         )}
