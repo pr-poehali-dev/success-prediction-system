@@ -37,6 +37,15 @@ interface CaptureArea {
   height: number;
 }
 
+interface PredictionHistory {
+  id: number;
+  timestamp: Date;
+  prediction: Column;
+  actual: Column;
+  isCorrect: boolean;
+  confidence: number;
+}
+
 const Index = () => {
   const [history, setHistory] = useState<HistoryEvent[]>([]);
   const [currentSuccess, setCurrentSuccess] = useState<Column | null>(null);
@@ -46,6 +55,7 @@ const Index = () => {
   const [previousPrediction, setPreviousPrediction] = useState<Column | null>(null);
   const [lastPredictionResult, setLastPredictionResult] = useState<'correct' | 'incorrect' | null>(null);
   const [accuracyHistory, setAccuracyHistory] = useState<AccuracyPoint[]>([]);
+  const [predictionHistory, setPredictionHistory] = useState<PredictionHistory[]>([]);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -414,10 +424,20 @@ const Index = () => {
       const detectedColumn = await recognizeColorFromArea();
       
       if (detectedColumn) {
-        if (previousPrediction) {
+        if (previousPrediction && ensemblePrediction) {
           const isCorrect = previousPrediction === detectedColumn;
           setLastPredictionResult(isCorrect ? 'correct' : 'incorrect');
           setTimeout(() => setLastPredictionResult(null), 5000);
+          
+          const predictionRecord: PredictionHistory = {
+            id: Date.now(),
+            timestamp: new Date(),
+            prediction: previousPrediction,
+            actual: detectedColumn,
+            isCorrect,
+            confidence: ensemblePrediction.confidence
+          };
+          setPredictionHistory(prev => [...prev, predictionRecord]);
         }
 
         const newEvent: HistoryEvent = {
@@ -587,6 +607,7 @@ const Index = () => {
     setPreviousPrediction(null);
     setLastPredictionResult(null);
     setAccuracyHistory([]);
+    setPredictionHistory([]);
     setIsPaused(false);
     setIsRunning(false);
     setLastRecognizedText('');
@@ -1180,6 +1201,82 @@ const Index = () => {
             </div>
           </Card>
         </div>
+
+        {predictionHistory.length > 0 && (
+          <Card className="bg-white/5 border-white/10 p-5">
+            <div className="flex items-center gap-3 mb-4">
+              <Icon name="Target" size={20} className="text-[#8B5CF6]" />
+              <h3 className="text-xl font-bold">История прогнозов</h3>
+              <Badge className="bg-[#8B5CF6]/20 text-[#8B5CF6] border-none">
+                Точность: {((predictionHistory.filter(p => p.isCorrect).length / predictionHistory.length) * 100).toFixed(1)}%
+              </Badge>
+            </div>
+            
+            <div className="max-h-64 overflow-y-auto space-y-2">
+              {predictionHistory.slice().reverse().map((pred, idx) => (
+                <div 
+                  key={pred.id}
+                  className={`flex items-center justify-between p-3 rounded-lg ${
+                    pred.isCorrect 
+                      ? 'bg-green-500/10 border border-green-500/30' 
+                      : 'bg-red-500/10 border border-red-500/30'
+                  } transition-colors`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-gray-500 text-sm w-8">#{predictionHistory.length - idx}</span>
+                    
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-gray-400">Прогноз:</div>
+                      <Badge 
+                        className={`${
+                          pred.prediction === 'alpha' 
+                            ? 'bg-[#0EA5E9]' 
+                            : 'bg-[#8B5CF6]'
+                        } text-white border-none`}
+                      >
+                        {pred.prediction === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
+                      </Badge>
+                    </div>
+
+                    <Icon 
+                      name="ArrowRight" 
+                      size={16} 
+                      className="text-gray-500"
+                    />
+
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs text-gray-400">Факт:</div>
+                      <Badge 
+                        className={`${
+                          pred.actual === 'alpha' 
+                            ? 'bg-[#0EA5E9]' 
+                            : 'bg-[#8B5CF6]'
+                        } text-white border-none`}
+                      >
+                        {pred.actual === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
+                      </Badge>
+                    </div>
+
+                    <Icon 
+                      name={pred.isCorrect ? "CheckCircle2" : "XCircle"} 
+                      size={20} 
+                      className={pred.isCorrect ? 'text-green-400' : 'text-red-400'}
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="text-xs text-gray-400">
+                      Уверенность: <span className="text-white font-semibold">{pred.confidence.toFixed(1)}%</span>
+                    </div>
+                    <span className="text-gray-400 text-sm">
+                      {pred.timestamp.toLocaleTimeString('ru-RU')}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         <Card className="bg-white/5 border-white/10 p-5">
           <div className="flex items-center gap-3 mb-4">
