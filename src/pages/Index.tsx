@@ -66,6 +66,7 @@ interface MethodStats {
 
 const Index = () => {
   const [history, setHistory] = useState<HistoryEvent[]>([]);
+  const [recognizedHistory, setRecognizedHistory] = useState<Column[]>([]);
   const [currentSuccess, setCurrentSuccess] = useState<Column | null>(null);
   const [timeLeft, setTimeLeft] = useState(30);
   const [predictions, setPredictions] = useState<AlgorithmPrediction[]>([]);
@@ -88,8 +89,8 @@ const Index = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  const analyzePattern = (hist: HistoryEvent[]): AlgorithmPrediction => {
-    if (hist.length < 3) {
+  const analyzePattern = (recHist: Column[]): AlgorithmPrediction => {
+    if (recHist.length < 3) {
       return {
         name: 'Pattern Recognition',
         prediction: 'alpha',
@@ -99,16 +100,16 @@ const Index = () => {
       };
     }
 
-    const last3 = hist.slice(-3).map(e => e.column);
+    const last3 = recHist.slice(-3);
     const pattern = last3.join('');
     
-    const allPatterns = hist.slice(0, -1).map((_, i) => 
-      hist.slice(i, i + 3).map(e => e.column).join('')
+    const allPatterns = recHist.slice(0, -1).map((_, i) => 
+      recHist.slice(i, i + 3).join('')
     );
     
     const nextAfterPattern = allPatterns
-      .map((p, i) => p === pattern ? hist[i + 3]?.column : null)
-      .filter(Boolean);
+      .map((p, i) => p === pattern ? recHist[i + 3] : null)
+      .filter(Boolean) as Column[];
 
     const alphaCount = nextAfterPattern.filter(c => c === 'alpha').length;
     const omegaCount = nextAfterPattern.filter(c => c === 'omega').length;
@@ -116,14 +117,19 @@ const Index = () => {
     const prediction: Column = alphaCount >= omegaCount ? 'alpha' : 'omega';
     const confidence = Math.min(95, 50 + (Math.abs(alphaCount - omegaCount) / (nextAfterPattern.length || 1)) * 45);
     
-    const correct = hist.slice(3).filter((e, i) => {
-      const prev3 = hist.slice(i, i + 3).map(ev => ev.column).join('');
-      const predicted = allPatterns.indexOf(prev3) >= 0 ? 
-        (alphaCount >= omegaCount ? 'alpha' : 'omega') : 'alpha';
-      return e.column === predicted;
+    const correct = recHist.slice(3).filter((col, i) => {
+      const prevPattern = recHist.slice(i, i + 3).join('');
+      const nextCol = recHist[i + 3];
+      const expectedNext = allPatterns
+        .map((p, j) => p === prevPattern ? recHist[j + 3] : null)
+        .filter(Boolean) as Column[];
+      const alphaC = expectedNext.filter(c => c === 'alpha').length;
+      const omegaC = expectedNext.filter(c => c === 'omega').length;
+      const expectedCol: Column = alphaC >= omegaC ? 'alpha' : 'omega';
+      return nextCol === expectedCol;
     }).length;
     
-    const accuracy = hist.length > 3 ? (correct / (hist.length - 3)) * 100 : 0;
+    const accuracy = recHist.length > 3 ? (correct / (recHist.length - 3)) * 100 : 0;
 
     return {
       name: 'Pattern Recognition',
@@ -134,10 +140,10 @@ const Index = () => {
     };
   };
 
-  const analyzeFrequency = (hist: HistoryEvent[]): AlgorithmPrediction => {
-    const alphaCount = hist.filter(e => e.column === 'alpha').length;
-    const omegaCount = hist.filter(e => e.column === 'omega').length;
-    const total = hist.length;
+  const analyzeFrequency = (recHist: Column[]): AlgorithmPrediction => {
+    const alphaCount = recHist.filter(c => c === 'alpha').length;
+    const omegaCount = recHist.filter(c => c === 'omega').length;
+    const total = recHist.length;
 
     if (total === 0) {
       return {
@@ -155,9 +161,14 @@ const Index = () => {
     const prediction: Column = alphaProb < omegaProb ? 'alpha' : 'omega';
     const confidence = Math.abs(alphaProb - omegaProb) * 100;
     
-    const expectedNext = alphaProb < omegaProb ? 'alpha' : 'omega';
-    const correct = hist.filter(e => e.column === expectedNext).length;
-    const accuracy = (correct / total) * 100;
+    const correct = recHist.filter((col, idx) => {
+      const prevAlpha = recHist.slice(0, idx).filter(c => c === 'alpha').length;
+      const prevOmega = recHist.slice(0, idx).filter(c => c === 'omega').length;
+      const expectedCol: Column = prevAlpha >= prevOmega ? 'alpha' : 'omega';
+      return col === expectedCol;
+    }).length;
+    
+    const accuracy = recHist.length > 0 ? (correct / recHist.length) * 100 : 0;
 
     return {
       name: 'Frequency Analysis',
@@ -168,8 +179,8 @@ const Index = () => {
     };
   };
 
-  const analyzeMarkov = (hist: HistoryEvent[]): AlgorithmPrediction => {
-    if (hist.length < 2) {
+  const analyzeMarkov = (recHist: Column[]): AlgorithmPrediction => {
+    if (recHist.length < 2) {
       return {
         name: 'Markov Chain',
         prediction: 'omega',
@@ -179,47 +190,33 @@ const Index = () => {
       };
     }
 
-    const last = hist[hist.length - 1].column;
+    const lastCol = recHist[recHist.length - 1];
     
-    const transitions = {
-      'alpha->alpha': 0,
-      'alpha->omega': 0,
-      'omega->alpha': 0,
-      'omega->omega': 0
-    };
+    const transitions = recHist.slice(0, -1).reduce((acc, from, i) => {
+      const to = recHist[i + 1];
+      if (!acc[from]) acc[from] = {};
+      acc[from][to] = (acc[from][to] || 0) + 1;
+      return acc;
+    }, {} as Record<Column, Record<Column, number>>);
 
-    for (let i = 0; i < hist.length - 1; i++) {
-      const from = hist[i].column;
-      const to = hist[i + 1].column;
-      transitions[`${from}->${to}` as keyof typeof transitions]++;
-    }
+    const trans = transitions[lastCol] || {};
+    const alphaProb = trans['alpha'] || 0;
+    const omegaProb = trans['omega'] || 0;
+    const total = alphaProb + omegaProb;
+    
+    const prediction: Column = alphaProb >= omegaProb ? 'alpha' : 'omega';
+    const confidence = total > 0 ? Math.abs(alphaProb - omegaProb) / total * 100 : 50;
 
-    const fromAlpha = transitions['alpha->alpha'] + transitions['alpha->omega'];
-    const fromOmega = transitions['omega->alpha'] + transitions['omega->omega'];
-
-    let prediction: Column;
-    let confidence: number;
-
-    if (last === 'alpha') {
-      const probOmega = fromAlpha > 0 ? transitions['alpha->omega'] / fromAlpha : 0.5;
-      prediction = probOmega > 0.5 ? 'omega' : 'alpha';
-      confidence = Math.abs(probOmega - 0.5) * 200;
-    } else {
-      const probAlpha = fromOmega > 0 ? transitions['omega->alpha'] / fromOmega : 0.5;
-      prediction = probAlpha > 0.5 ? 'alpha' : 'omega';
-      confidence = Math.abs(probAlpha - 0.5) * 200;
-    }
-
-    const correct = hist.slice(1).filter((e, i) => {
-      const prev = hist[i].column;
-      const expectedProb = prev === 'alpha' ?
-        (fromAlpha > 0 ? transitions['alpha->omega'] / fromAlpha : 0.5) :
-        (fromOmega > 0 ? transitions['omega->alpha'] / fromOmega : 0.5);
-      const expected = expectedProb > 0.5 ? (prev === 'alpha' ? 'omega' : 'alpha') : prev;
-      return e.column === expected;
+    const correct = recHist.slice(1).filter((col, i) => {
+      const prevCol = recHist[i];
+      const trans = transitions[prevCol] || {};
+      const alphaProb = trans['alpha'] || 0;
+      const omegaProb = trans['omega'] || 0;
+      const expectedCol: Column = alphaProb >= omegaProb ? 'alpha' : 'omega';
+      return col === expectedCol;
     }).length;
-
-    const accuracy = hist.length > 1 ? (correct / (hist.length - 1)) * 100 : 0;
+    
+    const accuracy = recHist.length > 1 ? (correct / (recHist.length - 1)) * 100 : 0;
 
     return {
       name: 'Markov Chain',
@@ -480,6 +477,7 @@ const Index = () => {
         };
         
         setHistory(prev => [...prev, newEvent]);
+        setRecognizedHistory(prev => [...prev, detectedColumn]);
         setCurrentSuccess(detectedColumn);
         
         const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGWS56+OZRQ0PVKjk7ahiHAU7k9rxzH0vBSl+zPDef0IKFmG47OWkUhEMTKXh8bllHgU');
@@ -570,10 +568,10 @@ const Index = () => {
   }, [isCapturing, captureArea]);
 
   useEffect(() => {
-    if (history.length > 0) {
-      const pattern = analyzePattern(history);
-      const frequency = analyzeFrequency(history);
-      const markov = analyzeMarkov(history);
+    if (recognizedHistory.length > 0) {
+      const pattern = analyzePattern(recognizedHistory);
+      const frequency = analyzeFrequency(recognizedHistory);
+      const markov = analyzeMarkov(recognizedHistory);
       
       const newPredictions = [pattern, frequency, markov];
       setPredictions(newPredictions);
@@ -589,7 +587,7 @@ const Index = () => {
         markov: markov.accuracy
       }].slice(-20));
     }
-  }, [history]);
+  }, [recognizedHistory]);
 
   const calculateMethodStats = (): MethodStats[] => {
     const methods = ['Pattern Recognition', 'Frequency Analysis', 'Markov Chain'];
@@ -654,6 +652,7 @@ const Index = () => {
 
   const handleReset = () => {
     setHistory([]);
+    setRecognizedHistory([]);
     setCurrentSuccess(null);
     setTimeLeft(30);
     setPredictions([]);
