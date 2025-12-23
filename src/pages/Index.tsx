@@ -394,6 +394,15 @@ const Index = () => {
   }, [history]);
 
   const handleStart = () => {
+    if (!isCapturing) {
+      toast({
+        title: "Сначала запустите захват экрана",
+        description: "Нажмите кнопку 'Начать захват экрана'",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     setIsRunning(true);
     setIsPaused(false);
     setTimeLeft(30);
@@ -433,6 +442,15 @@ const Index = () => {
   };
 
   const handlePauseResume = () => {
+    if (!isCapturing) {
+      toast({
+        title: "Сначала запустите захват экрана",
+        description: "Нажмите кнопку 'Начать захват экрана'",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     if (!isRunning) {
       toast({
         title: "Сначала запустите систему",
@@ -524,65 +542,68 @@ const Index = () => {
         </div>
 
         <div className="flex gap-3 justify-center flex-wrap">
-          {!isRunning ? (
-            <Button
-              onClick={handleStart}
-              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:opacity-90 text-white text-lg px-8 py-6"
-            >
-              <Icon name="Play" size={24} className="mr-2" />
-              Начать
-            </Button>
-          ) : (
-            <Button
-              onClick={handleStop}
-              className="bg-gradient-to-r from-red-500 to-red-600 hover:opacity-90 text-white text-lg px-8 py-6"
-            >
-              <Icon name="Square" size={24} className="mr-2" />
-              Стоп
-            </Button>
-          )}
-
           <Button
             onClick={isCapturing ? stopScreenCapture : startScreenCapture}
-            disabled={!isRunning}
             className={`${
               isCapturing 
                 ? 'bg-red-500 hover:bg-red-600' 
                 : 'bg-gradient-to-r from-[#8B5CF6] to-[#0EA5E9] hover:opacity-90'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
+            } text-lg px-8 py-6`}
           >
-            <Icon name={isCapturing ? "StopCircle" : "Monitor"} size={20} className="mr-2" />
+            <Icon name={isCapturing ? "StopCircle" : "Monitor"} size={24} className="mr-2" />
             {isCapturing ? 'Остановить захват' : 'Начать захват экрана'}
           </Button>
 
-          <Button
-            onClick={handlePauseResume}
-            variant="outline"
-            className="border-yellow-500 text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={!isRunning}
-          >
-            <Icon name={isPaused ? "Play" : "Pause"} size={20} className="mr-2" />
-            {isPaused ? 'Возобновить' : 'Пауза'}
-          </Button>
+          {isCapturing && (
+            <>
+              {!isRunning ? (
+                <Button
+                  onClick={handleStart}
+                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:opacity-90 text-white text-lg px-8 py-6"
+                >
+                  <Icon name="Play" size={24} className="mr-2" />
+                  Начать
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleStop}
+                  className="bg-gradient-to-r from-red-500 to-red-600 hover:opacity-90 text-white text-lg px-8 py-6"
+                >
+                  <Icon name="Square" size={24} className="mr-2" />
+                  Стоп
+                </Button>
+              )}
 
-          <Button
-            onClick={handleReset}
-            variant="outline"
-            className="border-red-500 text-red-400 hover:bg-red-500/10"
-          >
-            <Icon name="RotateCcw" size={20} className="mr-2" />
-            Сброс
-          </Button>
+              <Button
+                onClick={handlePauseResume}
+                variant="outline"
+                className="border-yellow-500 text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!isRunning}
+              >
+                <Icon name={isPaused ? "Play" : "Pause"} size={20} className="mr-2" />
+                {isPaused ? 'Возобновить' : 'Пауза'}
+              </Button>
 
-          {history.length > 0 && (
-            <Button
-              onClick={exportToCSV}
-              variant="outline"
-              className="border-[#8B5CF6] text-[#8B5CF6] hover:bg-[#8B5CF6]/10"
-            >
-              <Icon name="Download" size={20} className="mr-2" />
-              Экспорт в CSV
-            </Button>
+              <Button
+                onClick={handleReset}
+                variant="outline"
+                className="border-red-500 text-red-400 hover:bg-red-500/10"
+              >
+                <Icon name="RotateCcw" size={20} className="mr-2" />
+                Сброс
+              </Button>
+
+              {history.length > 0 && (
+                <Button
+                  onClick={exportToCSV}
+                  variant="outline"
+                  className="border-[#8B5CF6] text-[#8B5CF6] hover:bg-[#8B5CF6]/10"
+                >
+                  <Icon name="Download" size={20} className="mr-2" />
+                  Экспорт в CSV
+                </Button>
+              )}
+            </>
           )}
         </div>
 
@@ -595,20 +616,29 @@ const Index = () => {
           </Card>
         )}
 
-        {!isRunning && history.length === 0 && (
+        {!isCapturing && (
           <Card className="bg-blue-500/10 border-blue-500/30 p-4">
             <div className="flex items-center gap-3">
               <Icon name="Info" size={20} className="text-blue-400" />
-              <span className="text-blue-400 font-semibold">Нажмите кнопку "Начать" для запуска системы прогнозирования</span>
+              <span className="text-blue-400 font-semibold">Шаг 1: Нажмите "Начать захват экрана" для активации системы распознавания</span>
             </div>
           </Card>
         )}
 
-        {isRunning && !isPaused && (
+        {isCapturing && !isRunning && (
           <Card className="bg-green-500/10 border-green-500/30 p-4">
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-green-400 font-semibold">Система работает - отслеживание активно</span>
+              <span className="text-green-400 font-semibold">Захват экрана активен! Шаг 2: Нажмите "Начать" для запуска системы прогнозирования</span>
+            </div>
+          </Card>
+        )}
+
+        {isCapturing && isRunning && !isPaused && (
+          <Card className="bg-green-500/10 border-green-500/30 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-green-400 font-semibold">Система работает - захват экрана и прогнозирование активны</span>
             </div>
           </Card>
         )}
@@ -622,7 +652,7 @@ const Index = () => {
           </Card>
         )}
 
-        {!isRunning && history.length > 0 && (
+        {isCapturing && !isRunning && history.length > 0 && (
           <Card className="bg-orange-500/10 border-orange-500/30 p-4">
             <div className="flex items-center gap-3">
               <Icon name="AlertCircle" size={20} className="text-orange-400" />
