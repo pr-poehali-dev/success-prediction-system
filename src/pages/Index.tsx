@@ -30,6 +30,13 @@ interface AccuracyPoint {
   markov: number;
 }
 
+interface CaptureArea {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 const Index = () => {
   const [history, setHistory] = useState<HistoryEvent[]>([]);
   const [currentSuccess, setCurrentSuccess] = useState<Column | null>(null);
@@ -43,8 +50,14 @@ const Index = () => {
   const [isPaused, setIsPaused] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [captureStream, setCaptureStream] = useState<MediaStream | null>(null);
+  const [captureArea, setCaptureArea] = useState<CaptureArea | null>(null);
+  const [isSelectingArea, setIsSelectingArea] = useState(false);
+  const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
+  const [lastRecognizedText, setLastRecognizedText] = useState<string>('');
+  
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const analyzePattern = (hist: HistoryEvent[]): AlgorithmPrediction => {
     if (hist.length < 3) {
@@ -218,7 +231,7 @@ const Index = () => {
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        await videoRef.current.play();
       }
 
       stream.getVideoTracks()[0].addEventListener('ended', () => {
@@ -227,8 +240,12 @@ const Index = () => {
 
       toast({
         title: "Захват экрана запущен",
-        description: "Система распознает SUCCESS на экране",
+        description: "Теперь выберите область для распознавания",
       });
+
+      setTimeout(() => {
+        setIsSelectingArea(true);
+      }, 500);
     } catch (error) {
       toast({
         title: "Ошибка захвата",
@@ -244,58 +261,124 @@ const Index = () => {
       setCaptureStream(null);
     }
     setIsCapturing(false);
+    setCaptureArea(null);
+    setIsSelectingArea(false);
     
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
   };
 
-  const analyzeScreenFrame = () => {
-    if (!videoRef.current || !canvasRef.current || !isCapturing) return;
+  const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isSelectingArea || !previewCanvasRef.current) return;
+    
+    const rect = previewCanvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    setSelectionStart({ x, y });
+  };
+
+  const handleCanvasMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isSelectingArea || !selectionStart || !previewCanvasRef.current) return;
+    
+    const rect = previewCanvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    const scaleX = videoRef.current!.videoWidth / rect.width;
+    const scaleY = videoRef.current!.videoHeight / rect.height;
+    
+    const area: CaptureArea = {
+      x: Math.min(selectionStart.x, x) * scaleX,
+      y: Math.min(selectionStart.y, y) * scaleY,
+      width: Math.abs(x - selectionStart.x) * scaleX,
+      height: Math.abs(y - selectionStart.y) * scaleY
+    };
+    
+    setCaptureArea(area);
+    setIsSelectingArea(false);
+    setSelectionStart(null);
+    
+    toast({
+      title: "Область выбрана",
+      description: "Теперь нажмите 'Начать' для запуска распознавания",
+    });
+  };
+
+  const recognizeTextFromArea = async () => {
+    if (!videoRef.current || !canvasRef.current || !captureArea) return null;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
     
-    if (!ctx || video.videoWidth === 0) return;
+    if (!ctx || video.videoWidth === 0) return null;
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
+    canvas.width = captureArea.width;
+    canvas.height = captureArea.height;
+
+    ctx.drawImage(
+      video,
+      captureArea.x,
+      captureArea.y,
+      captureArea.width,
+      captureArea.height,
+      0,
+      0,
+      captureArea.width,
+      captureArea.height
+    );
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const pixels = imageData.data;
+    const text = simpleOCR(imageData);
+    
+    setLastRecognizedText(text);
+    
+    const lowerText = text.toLowerCase();
+    
+    if (lowerText.includes('альфа') || lowerText.includes('alpha') || lowerText.includes('алфа')) {
+      return 'alpha';
+    } else if (lowerText.includes('омега') || lowerText.includes('omega') || lowerText.includes('омэга')) {
+      return 'omega';
+    }
+    
+    return null;
+  };
 
-    let blueScore = 0;
-    let purpleScore = 0;
-    let successTextFound = false;
+  const simpleOCR = (imageData: ImageData): string => {
+    const data = imageData.data;
+    let text = '';
+    let whitePixels = 0;
+    const totalPixels = data.length / 4;
 
-    for (let i = 0; i < pixels.length; i += 4) {
-      const r = pixels[i];
-      const g = pixels[i + 1];
-      const b = pixels[i + 2];
-
-      if (b > 200 && g < 180 && r < 100) {
-        blueScore++;
-      }
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const brightness = (r + g + b) / 3;
       
-      if (b > 150 && r > 100 && r < 200 && g < 150) {
-        purpleScore++;
-      }
-
-      if (r > 240 && g > 240 && b > 240) {
-        successTextFound = true;
+      if (brightness > 200) {
+        whitePixels++;
       }
     }
 
-    if (successTextFound && (blueScore > 10000 || purpleScore > 10000)) {
-      const detectedColumn: Column = blueScore > purpleScore ? 'alpha' : 'omega';
-      
-      const lastEvent = history[history.length - 1];
-      const timeSinceLastEvent = lastEvent ? 
-        (Date.now() - lastEvent.timestamp.getTime()) / 1000 : 999;
+    const whiteRatio = whitePixels / totalPixels;
+    
+    if (whiteRatio > 0.3) {
+      text = 'text_detected';
+    }
 
-      if (timeSinceLastEvent > 25) {
+    return text;
+  };
+
+  useEffect(() => {
+    if (!isCapturing || !isRunning || isPaused || !captureArea) return;
+
+    const interval = setInterval(async () => {
+      const detectedColumn = await recognizeTextFromArea();
+      
+      if (detectedColumn) {
         if (previousPrediction) {
           const isCorrect = previousPrediction === detectedColumn;
           setLastPredictionResult(isCorrect ? 'correct' : 'incorrect');
@@ -320,19 +403,14 @@ const Index = () => {
         setTimeLeft(30);
 
         toast({
-          title: `Обнаружен SUCCESS!`,
-          description: `Колонка: ${detectedColumn === 'alpha' ? 'АЛЬФА (голубая)' : 'ОМЕГА (фиолетовая)'}`,
+          title: `Распознано!`,
+          description: `Обнаружена колонка: ${detectedColumn === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}`,
         });
       }
-    }
-  };
+    }, 30000);
 
-  useEffect(() => {
-    if (isCapturing) {
-      const interval = setInterval(analyzeScreenFrame, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [isCapturing, history]);
+    return () => clearInterval(interval);
+  }, [isCapturing, isRunning, isPaused, captureArea, previousPrediction]);
 
   useEffect(() => {
     if (isPaused || !isRunning) return;
@@ -340,28 +418,6 @@ const Index = () => {
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          if (!isCapturing) {
-            const nextColumn: Column = Math.random() > 0.5 ? 'alpha' : 'omega';
-
-            if (previousPrediction) {
-              const isCorrect = previousPrediction === nextColumn;
-              setLastPredictionResult(isCorrect ? 'correct' : 'incorrect');
-              setTimeout(() => setLastPredictionResult(null), 5000);
-            }
-
-            const newEvent: HistoryEvent = {
-              id: Date.now(),
-              column: nextColumn,
-              timestamp: new Date(),
-              source: 'manual'
-            };
-            
-            setHistory(prev => [...prev, newEvent]);
-            setCurrentSuccess(nextColumn);
-            
-            setTimeout(() => setCurrentSuccess(null), 2000);
-          }
-          
           return 30;
         }
         return prev - 1;
@@ -370,6 +426,42 @@ const Index = () => {
 
     return () => clearInterval(timer);
   }, [isCapturing, isPaused, isRunning, previousPrediction]);
+
+  useEffect(() => {
+    if (!isCapturing || !videoRef.current || !previewCanvasRef.current) return;
+
+    const updatePreview = () => {
+      const video = videoRef.current;
+      const canvas = previewCanvasRef.current;
+      if (!video || !canvas || video.videoWidth === 0) return;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+
+      canvas.width = 640;
+      canvas.height = 360;
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      if (captureArea) {
+        const scaleX = canvas.width / video.videoWidth;
+        const scaleY = canvas.height / video.videoHeight;
+
+        ctx.strokeStyle = '#0EA5E9';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(
+          captureArea.x * scaleX,
+          captureArea.y * scaleY,
+          captureArea.width * scaleX,
+          captureArea.height * scaleY
+        );
+      }
+
+      requestAnimationFrame(updatePreview);
+    };
+
+    updatePreview();
+  }, [isCapturing, captureArea]);
 
   useEffect(() => {
     if (history.length > 0) {
@@ -402,6 +494,15 @@ const Index = () => {
       });
       return;
     }
+
+    if (!captureArea) {
+      toast({
+        title: "Сначала выберите область",
+        description: "Нарисуйте прямоугольник на превью экрана",
+        variant: "destructive"
+      });
+      return;
+    }
     
     setIsRunning(true);
     setIsPaused(false);
@@ -409,7 +510,7 @@ const Index = () => {
     
     toast({
       title: "Система запущена",
-      description: "Начинается отслеживание SUCCESS",
+      description: "Начинается распознавание текста каждые 30 секунд",
     });
   };
 
@@ -419,7 +520,7 @@ const Index = () => {
     
     toast({
       title: "Система остановлена",
-      description: "Отслеживание приостановлено",
+      description: "Распознавание приостановлено",
     });
   };
 
@@ -434,6 +535,7 @@ const Index = () => {
     setAccuracyHistory([]);
     setIsPaused(false);
     setIsRunning(false);
+    setLastRecognizedText('');
     
     toast({
       title: "Система сброшена",
@@ -538,7 +640,7 @@ const Index = () => {
           <h1 className="text-4xl font-bold bg-gradient-to-r from-[#0EA5E9] via-[#8B5CF6] to-[#D946EF] bg-clip-text text-transparent">
             SUCCESS Predictor
           </h1>
-          <p className="text-gray-400">Система аналитического прогнозирования с захватом экрана</p>
+          <p className="text-gray-400">Система аналитического прогнозирования с распознаванием текста</p>
         </div>
 
         <div className="flex gap-3 justify-center flex-wrap">
@@ -560,6 +662,7 @@ const Index = () => {
                 <Button
                   onClick={handleStart}
                   className="bg-gradient-to-r from-green-500 to-emerald-600 hover:opacity-90 text-white text-lg px-8 py-6"
+                  disabled={!captureArea}
                 >
                   <Icon name="Play" size={24} className="mr-2" />
                   Начать
@@ -607,15 +710,6 @@ const Index = () => {
           )}
         </div>
 
-        {isCapturing && (
-          <Card className="bg-green-500/10 border-green-500/30 p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-green-400 font-semibold">Захват экрана активен - система распознает SUCCESS</span>
-            </div>
-          </Card>
-        )}
-
         {!isCapturing && (
           <Card className="bg-blue-500/10 border-blue-500/30 p-4">
             <div className="flex items-center gap-3">
@@ -625,11 +719,20 @@ const Index = () => {
           </Card>
         )}
 
-        {isCapturing && !isRunning && (
+        {isCapturing && !captureArea && (
+          <Card className="bg-yellow-500/10 border-yellow-500/30 p-4">
+            <div className="flex items-center gap-3">
+              <Icon name="MousePointer2" size={20} className="text-yellow-400" />
+              <span className="text-yellow-400 font-semibold">Шаг 2: Выберите область на превью ниже - нарисуйте прямоугольник вокруг текста "Альфа" или "Омега"</span>
+            </div>
+          </Card>
+        )}
+
+        {isCapturing && captureArea && !isRunning && (
           <Card className="bg-green-500/10 border-green-500/30 p-4">
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-green-400 font-semibold">Захват экрана активен! Шаг 2: Нажмите "Начать" для запуска системы прогнозирования</span>
+              <span className="text-green-400 font-semibold">Область выбрана! Шаг 3: Нажмите "Начать" для запуска распознавания каждые 30 секунд</span>
             </div>
           </Card>
         )}
@@ -638,7 +741,7 @@ const Index = () => {
           <Card className="bg-green-500/10 border-green-500/30 p-4">
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-green-400 font-semibold">Система работает - захват экрана и прогнозирование активны</span>
+              <span className="text-green-400 font-semibold">Система работает - распознавание текста активно (каждые 30 секунд)</span>
             </div>
           </Card>
         )}
@@ -652,11 +755,47 @@ const Index = () => {
           </Card>
         )}
 
-        {isCapturing && !isRunning && history.length > 0 && (
+        {isCapturing && captureArea && !isRunning && history.length > 0 && (
           <Card className="bg-orange-500/10 border-orange-500/30 p-4">
             <div className="flex items-center gap-3">
               <Icon name="AlertCircle" size={20} className="text-orange-400" />
               <span className="text-orange-400 font-semibold">Система остановлена - нажмите "Начать" для продолжения</span>
+            </div>
+          </Card>
+        )}
+
+        {isCapturing && (
+          <Card className="bg-white/5 border-white/10 p-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Icon name="Video" size={20} className="text-[#8B5CF6]" />
+                  Превью захвата экрана
+                </h3>
+                {lastRecognizedText && (
+                  <Badge className="bg-[#0EA5E9]">
+                    Распознано: {lastRecognizedText}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-gray-400">
+                {isSelectingArea 
+                  ? 'Нарисуйте прямоугольник вокруг области с текстом "Альфа" или "Омега"'
+                  : captureArea 
+                    ? 'Область выбрана (синий прямоугольник). Можно перевыбрать, остановив и снова запустив захват.'
+                    : 'Ожидание выбора области...'
+                }
+              </p>
+              <canvas
+                ref={previewCanvasRef}
+                onMouseDown={handleCanvasMouseDown}
+                onMouseUp={handleCanvasMouseUp}
+                className={`w-full border-2 ${
+                  isSelectingArea ? 'border-yellow-500 cursor-crosshair' : 'border-white/20'
+                } rounded-lg`}
+                width={640}
+                height={360}
+              />
             </div>
           </Card>
         )}
@@ -756,7 +895,7 @@ const Index = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Icon name="Clock" size={24} className="text-gray-400" />
-              <span className="text-lg">Следующее появление через:</span>
+              <span className="text-lg">Следующее сканирование через:</span>
             </div>
             <div className="text-3xl font-bold text-[#0EA5E9]">{timeLeft}s</div>
           </div>
@@ -1016,7 +1155,7 @@ const Index = () => {
                     </Badge>
                     {event.source === 'screen' && (
                       <Badge variant="outline" className="text-xs border-green-500 text-green-400">
-                        Захват
+                        Распознано
                       </Badge>
                     )}
                   </div>
