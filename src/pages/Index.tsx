@@ -36,8 +36,11 @@ const Index = () => {
   const [timeLeft, setTimeLeft] = useState(30);
   const [predictions, setPredictions] = useState<AlgorithmPrediction[]>([]);
   const [ensemblePrediction, setEnsemblePrediction] = useState<{ column: Column; confidence: number } | null>(null);
+  const [previousPrediction, setPreviousPrediction] = useState<Column | null>(null);
+  const [lastPredictionResult, setLastPredictionResult] = useState<'correct' | 'incorrect' | null>(null);
   const [accuracyHistory, setAccuracyHistory] = useState<AccuracyPoint[]>([]);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [captureStream, setCaptureStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -292,6 +295,12 @@ const Index = () => {
         (Date.now() - lastEvent.timestamp.getTime()) / 1000 : 999;
 
       if (timeSinceLastEvent > 25) {
+        if (previousPrediction) {
+          const isCorrect = previousPrediction === detectedColumn;
+          setLastPredictionResult(isCorrect ? 'correct' : 'incorrect');
+          setTimeout(() => setLastPredictionResult(null), 5000);
+        }
+
         const newEvent: HistoryEvent = {
           id: Date.now(),
           column: detectedColumn,
@@ -325,11 +334,20 @@ const Index = () => {
   }, [isCapturing, history]);
 
   useEffect(() => {
+    if (isPaused) return;
+
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
           if (!isCapturing) {
             const nextColumn: Column = Math.random() > 0.5 ? 'alpha' : 'omega';
+
+            if (previousPrediction) {
+              const isCorrect = previousPrediction === nextColumn;
+              setLastPredictionResult(isCorrect ? 'correct' : 'incorrect');
+              setTimeout(() => setLastPredictionResult(null), 5000);
+            }
+
             const newEvent: HistoryEvent = {
               id: Date.now(),
               column: nextColumn,
@@ -350,7 +368,7 @@ const Index = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [isCapturing]);
+  }, [isCapturing, isPaused, previousPrediction]);
 
   useEffect(() => {
     if (history.length > 0) {
@@ -363,6 +381,7 @@ const Index = () => {
       
       const ensemble = calculateEnsemble(newPredictions);
       setEnsemblePrediction(ensemble);
+      setPreviousPrediction(ensemble.column);
 
       setAccuracyHistory(prev => [...prev, {
         timestamp: Date.now(),
@@ -372,6 +391,32 @@ const Index = () => {
       }].slice(-20));
     }
   }, [history]);
+
+  const handleReset = () => {
+    setHistory([]);
+    setCurrentSuccess(null);
+    setTimeLeft(30);
+    setPredictions([]);
+    setEnsemblePrediction(null);
+    setPreviousPrediction(null);
+    setLastPredictionResult(null);
+    setAccuracyHistory([]);
+    setIsPaused(false);
+    
+    toast({
+      title: "Система сброшена",
+      description: "Все данные очищены, начните заново",
+    });
+  };
+
+  const handlePauseResume = () => {
+    setIsPaused(prev => !prev);
+    
+    toast({
+      title: isPaused ? "Возобновлено" : "Пауза",
+      description: isPaused ? "Таймер снова работает" : "Таймер остановлен",
+    });
+  };
 
   const exportToCSV = () => {
     const csv = [
@@ -446,7 +491,7 @@ const Index = () => {
           <p className="text-gray-400">Система аналитического прогнозирования с захватом экрана</p>
         </div>
 
-        <div className="flex gap-3 justify-center">
+        <div className="flex gap-3 justify-center flex-wrap">
           <Button
             onClick={isCapturing ? stopScreenCapture : startScreenCapture}
             className={`${
@@ -457,6 +502,24 @@ const Index = () => {
           >
             <Icon name={isCapturing ? "StopCircle" : "Monitor"} size={20} className="mr-2" />
             {isCapturing ? 'Остановить захват' : 'Начать захват экрана'}
+          </Button>
+
+          <Button
+            onClick={handlePauseResume}
+            variant="outline"
+            className="border-yellow-500 text-yellow-400 hover:bg-yellow-500/10"
+          >
+            <Icon name={isPaused ? "Play" : "Pause"} size={20} className="mr-2" />
+            {isPaused ? 'Возобновить' : 'Пауза'}
+          </Button>
+
+          <Button
+            onClick={handleReset}
+            variant="outline"
+            className="border-red-500 text-red-400 hover:bg-red-500/10"
+          >
+            <Icon name="RotateCcw" size={20} className="mr-2" />
+            Сброс
           </Button>
 
           {history.length > 0 && (
@@ -476,6 +539,58 @@ const Index = () => {
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
               <span className="text-green-400 font-semibold">Захват экрана активен - система распознает SUCCESS</span>
+            </div>
+          </Card>
+        )}
+
+        {isPaused && (
+          <Card className="bg-yellow-500/10 border-yellow-500/30 p-4">
+            <div className="flex items-center gap-3">
+              <Icon name="Pause" size={20} className="text-yellow-400" />
+              <span className="text-yellow-400 font-semibold">Система на паузе - таймер остановлен</span>
+            </div>
+          </Card>
+        )}
+
+        {lastPredictionResult && (
+          <Card className={`${
+            lastPredictionResult === 'correct' 
+              ? 'bg-green-500/10 border-green-500/30' 
+              : 'bg-red-500/10 border-red-500/30'
+          } p-6 animate-scale-in`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Icon 
+                  name={lastPredictionResult === 'correct' ? "CheckCircle2" : "XCircle"} 
+                  size={32} 
+                  className={lastPredictionResult === 'correct' ? 'text-green-400' : 'text-red-400'}
+                />
+                <div>
+                  <h3 className={`text-2xl font-bold ${
+                    lastPredictionResult === 'correct' ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    {lastPredictionResult === 'correct' ? 'Прогноз совпал!' : 'Прогноз не совпал'}
+                  </h3>
+                  <p className="text-gray-400 mt-1">
+                    Предсказанная колонка: <Badge className={`${
+                      previousPrediction === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'
+                    } text-white border-none ml-2`}>
+                      {previousPrediction === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
+                    </Badge>
+                  </p>
+                  <p className="text-gray-400 mt-1">
+                    Фактический результат: <Badge className={`${
+                      history[history.length - 1]?.column === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'
+                    } text-white border-none ml-2`}>
+                      {history[history.length - 1]?.column === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
+                    </Badge>
+                  </p>
+                </div>
+              </div>
+              
+              {lastPredictionResult === 'correct' && (
+                <div className="text-6xl">🎯</div>
+              )}
             </div>
           </Card>
         )}
