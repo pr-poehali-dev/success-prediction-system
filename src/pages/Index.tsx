@@ -306,7 +306,7 @@ const Index = () => {
     });
   };
 
-  const recognizeTextFromArea = async () => {
+  const recognizeColorFromArea = async () => {
     if (!videoRef.current || !canvasRef.current || !captureArea) return null;
 
     const video = videoRef.current;
@@ -331,200 +331,79 @@ const Index = () => {
     );
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const detectedText = simpleOCR(imageData);
+    const detectedColor = analyzeColorPattern(imageData);
     
-    const displayText = detectedText === 'alpha' ? 'АЛЬФА' : 
-                        detectedText === 'omega' ? 'ОМЕГА' : 
+    const displayText = detectedColor === 'alpha' ? 'АЛЬФА (голубой)' : 
+                        detectedColor === 'omega' ? 'ОМЕГА (фиолетовый)' : 
                         'Не распознано';
     setLastRecognizedText(displayText);
     
-    if (detectedText === 'alpha') {
+    if (detectedColor === 'alpha') {
       return 'alpha';
-    } else if (detectedText === 'omega') {
+    } else if (detectedColor === 'omega') {
       return 'omega';
     }
     
     return null;
   };
 
-  const preprocessImage = (imageData: ImageData): ImageData => {
+  const analyzeColorPattern = (imageData: ImageData): string => {
     const data = imageData.data;
-    const width = imageData.width;
-    const height = imageData.height;
+    const totalPixels = data.length / 4;
+
+    let blueScore = 0;
+    let purpleScore = 0;
+    let cyanoCount = 0;
+    let purpleCount = 0;
 
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
-      
-      let gray = 0.299 * r + 0.587 * g + 0.114 * b;
-      
-      gray = Math.min(255, gray * 1.8);
-      
-      const threshold = 140;
-      gray = gray > threshold ? 255 : 0;
-      
-      data[i] = gray;
-      data[i + 1] = gray;
-      data[i + 2] = gray;
-    }
 
-    return imageData;
-  };
+      const brightness = (r + g + b) / 3;
+      if (brightness < 30) continue;
 
-  const analyzeTextPattern = (imageData: ImageData): { alpha: number; omega: number } => {
-    const data = imageData.data;
-    const width = imageData.width;
-    const height = imageData.height;
+      const isBlue = b > 150 && b > r * 1.3 && b > g * 1.1 && g > r * 0.8;
+      const isCyan = b > 120 && g > 100 && b > r * 1.5 && Math.abs(b - g) < 80;
+      
+      const isPurple = b > 100 && r > 80 && b > g * 1.2 && r > g * 0.9 && Math.abs(r - b) < 100;
+      const isMagenta = r > 100 && b > 100 && b > g * 1.3 && r > g * 1.2;
 
-    let horizontalLines = 0;
-    let verticalLines = 0;
-    let diagonalPixels = 0;
-    let whitePixels = 0;
-    let blackPixels = 0;
-    let edges = 0;
+      if (isBlue || isCyan) {
+        cyanoCount++;
+        blueScore += (b - r) + (b - g);
+      }
 
-    for (let y = 0; y < height; y++) {
-      let consecutiveWhite = 0;
-      for (let x = 0; x < width; x++) {
-        const idx = (y * width + x) * 4;
-        const brightness = data[idx];
-        
-        if (brightness > 200) {
-          whitePixels++;
-          consecutiveWhite++;
-        } else {
-          blackPixels++;
-          if (consecutiveWhite > width * 0.2) {
-            horizontalLines++;
-          }
-          consecutiveWhite = 0;
-        }
+      if (isPurple || isMagenta) {
+        purpleCount++;
+        purpleScore += (r + b - g * 2) + Math.abs(r - b);
       }
     }
 
-    for (let x = 0; x < width; x++) {
-      let consecutiveWhite = 0;
-      for (let y = 0; y < height; y++) {
-        const idx = (y * width + x) * 4;
-        const brightness = data[idx];
-        
-        if (brightness > 200) {
-          consecutiveWhite++;
-        } else {
-          if (consecutiveWhite > height * 0.2) {
-            verticalLines++;
-          }
-          consecutiveWhite = 0;
-        }
-      }
+    const cyanRatio = cyanoCount / totalPixels;
+    const purpleRatio = purpleCount / totalPixels;
+
+    if (cyanRatio > 0.05) {
+      blueScore += cyanRatio * 10000;
+    }
+    if (purpleRatio > 0.05) {
+      purpleScore += purpleRatio * 10000;
     }
 
-    for (let y = 1; y < height - 1; y++) {
-      for (let x = 1; x < width - 1; x++) {
-        const idx = (y * width + x) * 4;
-        const current = data[idx];
-        
-        const top = data[((y - 1) * width + x) * 4];
-        const bottom = data[((y + 1) * width + x) * 4];
-        const left = data[(y * width + (x - 1)) * 4];
-        const right = data[(y * width + (x + 1)) * 4];
-        
-        if (Math.abs(current - top) > 200 || Math.abs(current - bottom) > 200 ||
-            Math.abs(current - left) > 200 || Math.abs(current - right) > 200) {
-          edges++;
-        }
-      }
-    }
+    const minThreshold = 500;
+    const confidence = Math.abs(blueScore - purpleScore);
 
-    for (let y = 0; y < height - 1; y++) {
-      for (let x = 0; x < width - 1; x++) {
-        const idx = (y * width + x) * 4;
-        const diag = data[((y + 1) * width + (x + 1)) * 4];
-        
-        if (Math.abs(data[idx] - diag) > 200) {
-          diagonalPixels++;
-        }
-      }
-    }
-
-    const totalPixels = width * height;
-    const density = whitePixels / totalPixels;
-    const edgeDensity = edges / totalPixels;
-
-    let alphaScore = 0;
-    let omegaScore = 0;
-
-    if (horizontalLines >= 2 && verticalLines >= 2) {
-      alphaScore += 35;
-    }
-    
-    if (horizontalLines >= 1 && verticalLines >= 1) {
-      alphaScore += 15;
-    }
-
-    if (diagonalPixels > totalPixels * 0.03) {
-      alphaScore += 25;
-    }
-
-    if (edges > totalPixels * 0.08) {
-      omegaScore += 40;
-    }
-    
-    if (edges > totalPixels * 0.12) {
-      omegaScore += 20;
-    }
-
-    if (density > 0.15 && density < 0.40) {
-      alphaScore += 20;
-    }
-    
-    if (density > 0.20 && density < 0.50) {
-      omegaScore += 25;
-    }
-
-    const aspectRatio = width / height;
-    if (aspectRatio > 1.0 && aspectRatio < 2.5) {
-      alphaScore += 10;
-    }
-    if (aspectRatio > 1.3 && aspectRatio < 3.5) {
-      omegaScore += 15;
-    }
-
-    if (edgeDensity > 0.08 && edgeDensity < 0.15) {
-      alphaScore += 15;
-    }
-    if (edgeDensity > 0.12) {
-      omegaScore += 20;
-    }
-
-    return { alpha: alphaScore, omega: omegaScore };
-  };
-
-  const simpleOCR = (imageData: ImageData): string => {
-    const tempCanvas = document.createElement('canvas');
-    tempCanvas.width = imageData.width;
-    tempCanvas.height = imageData.height;
-    const tempCtx = tempCanvas.getContext('2d');
-    if (!tempCtx) return 'unknown';
-    
-    tempCtx.putImageData(imageData, 0, 0);
-    const newImageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-    
-    const processedData = preprocessImage(newImageData);
-    const scores = analyzeTextPattern(processedData);
-    
-    const threshold = 35;
-    const confidence = Math.abs(scores.alpha - scores.omega);
-    
-    if (scores.alpha > threshold && scores.alpha > scores.omega && confidence > 15) {
+    if (blueScore > minThreshold && blueScore > purpleScore && confidence > 300) {
       return 'alpha';
-    } else if (scores.omega > threshold && scores.omega > scores.alpha && confidence > 15) {
+    } else if (purpleScore > minThreshold && purpleScore > blueScore && confidence > 300) {
       return 'omega';
-    } else if (confidence < 15 && (scores.alpha > 30 || scores.omega > 30)) {
-      return scores.alpha > scores.omega ? 'alpha' : 'omega';
+    } else if (blueScore > purpleScore && blueScore > minThreshold * 0.5) {
+      return 'alpha';
+    } else if (purpleScore > blueScore && purpleScore > minThreshold * 0.5) {
+      return 'omega';
     }
-    
+
     return 'unknown';
   };
 
@@ -532,7 +411,7 @@ const Index = () => {
     if (!isCapturing || !isRunning || isPaused || !captureArea) return;
 
     const interval = setInterval(async () => {
-      const detectedColumn = await recognizeTextFromArea();
+      const detectedColumn = await recognizeColorFromArea();
       
       if (detectedColumn) {
         if (previousPrediction) {
@@ -666,7 +545,7 @@ const Index = () => {
     
     toast({
       title: "Система запущена",
-      description: "Начинается распознавание текста каждые 30 секунд",
+      description: "Начинается распознавание цвета каждые 30 секунд",
     });
   };
 
@@ -879,7 +758,7 @@ const Index = () => {
           <Card className="bg-yellow-500/10 border-yellow-500/30 p-4">
             <div className="flex items-center gap-3">
               <Icon name="MousePointer2" size={20} className="text-yellow-400" />
-              <span className="text-yellow-400 font-semibold">Шаг 2: Выберите область на превью ниже - нарисуйте прямоугольник вокруг текста "Альфа" или "Омега"</span>
+              <span className="text-yellow-400 font-semibold">Шаг 2: Выберите область на превью ниже - нарисуйте прямоугольник вокруг голубой или фиолетовой колонки</span>
             </div>
           </Card>
         )}
@@ -888,7 +767,7 @@ const Index = () => {
           <Card className="bg-green-500/10 border-green-500/30 p-4">
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-green-400 font-semibold">Область выбрана! Шаг 3: Нажмите "Начать" для запуска распознавания каждые 30 секунд</span>
+              <span className="text-green-400 font-semibold">Область выбрана! Шаг 3: Нажмите "Начать" для запуска распознавания цвета каждые 30 секунд</span>
             </div>
           </Card>
         )}
@@ -897,7 +776,7 @@ const Index = () => {
           <Card className="bg-green-500/10 border-green-500/30 p-4">
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-green-400 font-semibold">Система работает - распознавание текста активно (каждые 30 секунд)</span>
+              <span className="text-green-400 font-semibold">Система работает - распознавание цвета активно (каждые 30 секунд)</span>
             </div>
           </Card>
         )}
@@ -936,9 +815,9 @@ const Index = () => {
               </div>
               <p className="text-sm text-gray-400">
                 {isSelectingArea 
-                  ? 'Нарисуйте прямоугольник вокруг области с текстом "Альфа" или "Омега"'
+                  ? 'Нарисуйте прямоугольник вокруг голубой (Альфа) или фиолетовой (Омега) области'
                   : captureArea 
-                    ? 'Область выбрана (синий прямоугольник). Можно перевыбрать, остановив и снова запустив захват.'
+                    ? 'Область выбрана (синий прямоугольник). Система определяет доминирующий цвет: голубой = Альфа, фиолетовый = Омега.'
                     : 'Ожидание выбора области...'
                 }
               </p>
