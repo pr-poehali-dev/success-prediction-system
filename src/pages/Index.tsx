@@ -465,13 +465,26 @@ const Index = () => {
   useEffect(() => {
     if (!isCapturing || !videoRef.current || !previewCanvasRef.current) return;
 
+    let animationId: number;
+    
     const updatePreview = () => {
       const video = videoRef.current;
       const canvas = previewCanvasRef.current;
-      if (!video || !canvas || video.videoWidth === 0) return;
+      if (!video || !canvas) {
+        animationId = requestAnimationFrame(updatePreview);
+        return;
+      }
+
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        animationId = requestAnimationFrame(updatePreview);
+        return;
+      }
 
       const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      if (!ctx) {
+        animationId = requestAnimationFrame(updatePreview);
+        return;
+      }
 
       canvas.width = 640;
       canvas.height = 360;
@@ -492,10 +505,16 @@ const Index = () => {
         );
       }
 
-      requestAnimationFrame(updatePreview);
+      animationId = requestAnimationFrame(updatePreview);
     };
 
-    updatePreview();
+    animationId = requestAnimationFrame(updatePreview);
+    
+    return () => {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+    };
   }, [isCapturing, captureArea]);
 
   useEffect(() => {
