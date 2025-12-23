@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
+import { toast } from '@/hooks/use-toast';
 
 type Column = 'alpha' | 'omega';
 
@@ -10,6 +12,7 @@ interface HistoryEvent {
   id: number;
   column: Column;
   timestamp: Date;
+  source: 'manual' | 'screen';
 }
 
 interface AlgorithmPrediction {
@@ -20,12 +23,24 @@ interface AlgorithmPrediction {
   description: string;
 }
 
+interface AccuracyPoint {
+  timestamp: number;
+  pattern: number;
+  frequency: number;
+  markov: number;
+}
+
 const Index = () => {
   const [history, setHistory] = useState<HistoryEvent[]>([]);
   const [currentSuccess, setCurrentSuccess] = useState<Column | null>(null);
   const [timeLeft, setTimeLeft] = useState(30);
   const [predictions, setPredictions] = useState<AlgorithmPrediction[]>([]);
   const [ensemblePrediction, setEnsemblePrediction] = useState<{ column: Column; confidence: number } | null>(null);
+  const [accuracyHistory, setAccuracyHistory] = useState<AccuracyPoint[]>([]);
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [captureStream, setCaptureStream] = useState<MediaStream | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const analyzePattern = (hist: HistoryEvent[]): AlgorithmPrediction => {
     if (hist.length < 3) {
@@ -53,7 +68,7 @@ const Index = () => {
     const omegaCount = nextAfterPattern.filter(c => c === 'omega').length;
     
     const prediction: Column = alphaCount >= omegaCount ? 'alpha' : 'omega';
-    const confidence = Math.min(95, 50 + (Math.abs(alphaCount - omegaCount) / nextAfterPattern.length) * 45);
+    const confidence = Math.min(95, 50 + (Math.abs(alphaCount - omegaCount) / (nextAfterPattern.length || 1)) * 45);
     
     const correct = hist.slice(3).filter((e, i) => {
       const prev3 = hist.slice(i, i + 3).map(ev => ev.column).join('');
@@ -188,21 +203,145 @@ const Index = () => {
     return { column, confidence };
   };
 
+  const startScreenCapture = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { mediaSource: 'screen' }
+      });
+      
+      setCaptureStream(stream);
+      setIsCapturing(true);
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+
+      stream.getVideoTracks()[0].addEventListener('ended', () => {
+        stopScreenCapture();
+      });
+
+      toast({
+        title: "Захват экрана запущен",
+        description: "Система распознает SUCCESS на экране",
+      });
+    } catch (error) {
+      toast({
+        title: "Ошибка захвата",
+        description: "Не удалось начать захват экрана",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const stopScreenCapture = () => {
+    if (captureStream) {
+      captureStream.getTracks().forEach(track => track.stop());
+      setCaptureStream(null);
+    }
+    setIsCapturing(false);
+    
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  const analyzeScreenFrame = () => {
+    if (!videoRef.current || !canvasRef.current || !isCapturing) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    
+    if (!ctx || video.videoWidth === 0) return;
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    ctx.drawImage(video, 0, 0);
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const pixels = imageData.data;
+
+    let blueScore = 0;
+    let purpleScore = 0;
+    let successTextFound = false;
+
+    for (let i = 0; i < pixels.length; i += 4) {
+      const r = pixels[i];
+      const g = pixels[i + 1];
+      const b = pixels[i + 2];
+
+      if (b > 200 && g < 180 && r < 100) {
+        blueScore++;
+      }
+      
+      if (b > 150 && r > 100 && r < 200 && g < 150) {
+        purpleScore++;
+      }
+
+      if (r > 240 && g > 240 && b > 240) {
+        successTextFound = true;
+      }
+    }
+
+    if (successTextFound && (blueScore > 10000 || purpleScore > 10000)) {
+      const detectedColumn: Column = blueScore > purpleScore ? 'alpha' : 'omega';
+      
+      const lastEvent = history[history.length - 1];
+      const timeSinceLastEvent = lastEvent ? 
+        (Date.now() - lastEvent.timestamp.getTime()) / 1000 : 999;
+
+      if (timeSinceLastEvent > 25) {
+        const newEvent: HistoryEvent = {
+          id: Date.now(),
+          column: detectedColumn,
+          timestamp: new Date(),
+          source: 'screen'
+        };
+        
+        setHistory(prev => [...prev, newEvent]);
+        setCurrentSuccess(detectedColumn);
+        
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGWS56+OZRQ0PVKjk7ahiHAU7k9rxzH0vBSl+zPDef0IKFmG47OWkUhEMTKXh8bllHgU');
+        audio.volume = 0.3;
+        audio.play().catch(() => {});
+        
+        setTimeout(() => setCurrentSuccess(null), 2000);
+        setTimeLeft(30);
+
+        toast({
+          title: `Обнаружен SUCCESS!`,
+          description: `Колонка: ${detectedColumn === 'alpha' ? 'АЛЬФА (голубая)' : 'ОМЕГА (фиолетовая)'}`,
+        });
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (isCapturing) {
+      const interval = setInterval(analyzeScreenFrame, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [isCapturing, history]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          const nextColumn: Column = Math.random() > 0.5 ? 'alpha' : 'omega';
-          const newEvent: HistoryEvent = {
-            id: Date.now(),
-            column: nextColumn,
-            timestamp: new Date()
-          };
-          
-          setHistory(prev => [...prev, newEvent]);
-          setCurrentSuccess(nextColumn);
-          
-          setTimeout(() => setCurrentSuccess(null), 2000);
+          if (!isCapturing) {
+            const nextColumn: Column = Math.random() > 0.5 ? 'alpha' : 'omega';
+            const newEvent: HistoryEvent = {
+              id: Date.now(),
+              column: nextColumn,
+              timestamp: new Date(),
+              source: 'manual'
+            };
+            
+            setHistory(prev => [...prev, newEvent]);
+            setCurrentSuccess(nextColumn);
+            
+            setTimeout(() => setCurrentSuccess(null), 2000);
+          }
           
           return 30;
         }
@@ -211,7 +350,7 @@ const Index = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [isCapturing]);
 
   useEffect(() => {
     if (history.length > 0) {
@@ -224,8 +363,38 @@ const Index = () => {
       
       const ensemble = calculateEnsemble(newPredictions);
       setEnsemblePrediction(ensemble);
+
+      setAccuracyHistory(prev => [...prev, {
+        timestamp: Date.now(),
+        pattern: pattern.accuracy,
+        frequency: frequency.accuracy,
+        markov: markov.accuracy
+      }].slice(-20));
     }
   }, [history]);
+
+  const exportToCSV = () => {
+    const csv = [
+      ['№', 'Колонка', 'Время', 'Источник'].join(','),
+      ...history.map((e, i) => [
+        i + 1,
+        e.column === 'alpha' ? 'Альфа' : 'Омега',
+        e.timestamp.toLocaleString('ru-RU'),
+        e.source === 'screen' ? 'Захват экрана' : 'Ручной'
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `success_history_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+
+    toast({
+      title: "Экспорт завершен",
+      description: `Сохранено ${history.length} событий в CSV`,
+    });
+  };
 
   const stats = {
     alpha: history.filter(e => e.column === 'alpha').length,
@@ -266,13 +435,50 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#1A1F2C] via-[#221F26] to-[#1A1F2C] text-white p-6">
+      <video ref={videoRef} className="hidden" />
+      <canvas ref={canvasRef} className="hidden" />
+      
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="text-center space-y-2 mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-[#0EA5E9] via-[#8B5CF6] to-[#D946EF] bg-clip-text text-transparent">
             SUCCESS Predictor
           </h1>
-          <p className="text-gray-400">Система аналитического прогнозирования</p>
+          <p className="text-gray-400">Система аналитического прогнозирования с захватом экрана</p>
         </div>
+
+        <div className="flex gap-3 justify-center">
+          <Button
+            onClick={isCapturing ? stopScreenCapture : startScreenCapture}
+            className={`${
+              isCapturing 
+                ? 'bg-red-500 hover:bg-red-600' 
+                : 'bg-gradient-to-r from-[#8B5CF6] to-[#0EA5E9] hover:opacity-90'
+            }`}
+          >
+            <Icon name={isCapturing ? "StopCircle" : "Monitor"} size={20} className="mr-2" />
+            {isCapturing ? 'Остановить захват' : 'Начать захват экрана'}
+          </Button>
+
+          {history.length > 0 && (
+            <Button
+              onClick={exportToCSV}
+              variant="outline"
+              className="border-[#8B5CF6] text-[#8B5CF6] hover:bg-[#8B5CF6]/10"
+            >
+              <Icon name="Download" size={20} className="mr-2" />
+              Экспорт в CSV
+            </Button>
+          )}
+        </div>
+
+        {isCapturing && (
+          <Card className="bg-green-500/10 border-green-500/30 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-green-400 font-semibold">Захват экрана активен - система распознает SUCCESS</span>
+            </div>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Card className="bg-[#0EA5E9]/10 border-[#0EA5E9]/30 p-8 relative overflow-hidden">
@@ -285,7 +491,7 @@ const Index = () => {
               
               {currentSuccess === 'alpha' && (
                 <div className="animate-scale-in">
-                  <Badge className="text-2xl py-3 px-6 bg-[#0EA5E9] text-white border-none">
+                  <Badge className="text-2xl py-3 px-6 bg-[#0EA5E9] text-white border-none animate-pulse">
                     SUCCESS
                   </Badge>
                 </div>
@@ -308,7 +514,7 @@ const Index = () => {
               
               {currentSuccess === 'omega' && (
                 <div className="animate-scale-in">
-                  <Badge className="text-2xl py-3 px-6 bg-[#8B5CF6] text-white border-none">
+                  <Badge className="text-2xl py-3 px-6 bg-[#8B5CF6] text-white border-none animate-pulse">
                     SUCCESS
                   </Badge>
                 </div>
@@ -366,6 +572,54 @@ const Index = () => {
                 <div className="text-4xl font-bold text-[#8B5CF6]">
                   {ensemblePrediction.confidence.toFixed(1)}%
                 </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {accuracyHistory.length > 5 && (
+          <Card className="bg-white/5 border-white/10 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Icon name="LineChart" size={24} className="text-[#D946EF]" />
+              <h3 className="text-xl font-bold">Тренд точности алгоритмов</h3>
+            </div>
+            
+            <div className="h-48 flex items-end gap-1">
+              {accuracyHistory.map((point, idx) => (
+                <div key={idx} className="flex-1 flex flex-col gap-1 items-center">
+                  <div className="w-full flex flex-col gap-1">
+                    <div 
+                      className="w-full bg-[#0EA5E9]/50 rounded-t transition-all"
+                      style={{ height: `${(point.pattern / 100) * 140}px` }}
+                      title={`Pattern: ${point.pattern.toFixed(1)}%`}
+                    />
+                    <div 
+                      className="w-full bg-[#8B5CF6]/50 rounded-t transition-all"
+                      style={{ height: `${(point.frequency / 100) * 140}px` }}
+                      title={`Frequency: ${point.frequency.toFixed(1)}%`}
+                    />
+                    <div 
+                      className="w-full bg-[#D946EF]/50 rounded-t transition-all"
+                      style={{ height: `${(point.markov / 100) * 140}px` }}
+                      title={`Markov: ${point.markov.toFixed(1)}%`}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <div className="flex gap-4 justify-center mt-4 text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-[#0EA5E9]/50 rounded" />
+                <span className="text-gray-400">Pattern</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-[#8B5CF6]/50 rounded" />
+                <span className="text-gray-400">Frequency</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 bg-[#D946EF]/50 rounded" />
+                <span className="text-gray-400">Markov</span>
               </div>
             </div>
           </Card>
@@ -491,7 +745,7 @@ const Index = () => {
               <h4 className="font-semibold">Последние 10</h4>
             </div>
             <div className="flex gap-1 flex-wrap">
-              {history.slice(-10).reverse().map((event, idx) => (
+              {history.slice(-10).reverse().map((event) => (
                 <Badge 
                   key={event.id}
                   variant="outline"
@@ -500,8 +754,10 @@ const Index = () => {
                       ? 'border-[#0EA5E9] text-[#0EA5E9] bg-[#0EA5E9]/10' 
                       : 'border-[#8B5CF6] text-[#8B5CF6] bg-[#8B5CF6]/10'
                   } text-xs`}
+                  title={event.source === 'screen' ? 'Захват экрана' : 'Ручной'}
                 >
                   {event.column === 'alpha' ? 'α' : 'ω'}
+                  {event.source === 'screen' && '📹'}
                 </Badge>
               ))}
             </div>
@@ -534,6 +790,11 @@ const Index = () => {
                     >
                       {event.column === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
                     </Badge>
+                    {event.source === 'screen' && (
+                      <Badge variant="outline" className="text-xs border-green-500 text-green-400">
+                        Захват
+                      </Badge>
+                    )}
                   </div>
                   <span className="text-gray-400 text-sm">
                     {event.timestamp.toLocaleTimeString('ru-RU')}
