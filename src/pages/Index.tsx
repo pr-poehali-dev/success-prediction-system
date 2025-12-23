@@ -46,6 +46,24 @@ interface PredictionHistory {
   confidence: number;
 }
 
+interface MethodPredictionHistory {
+  id: number;
+  timestamp: Date;
+  methodName: string;
+  prediction: Column;
+  actual: Column;
+  isCorrect: boolean;
+  confidence: number;
+}
+
+interface MethodStats {
+  name: string;
+  totalPredictions: number;
+  correctPredictions: number;
+  accuracy: number;
+  avgConfidence: number;
+}
+
 const Index = () => {
   const [history, setHistory] = useState<HistoryEvent[]>([]);
   const [currentSuccess, setCurrentSuccess] = useState<Column | null>(null);
@@ -56,6 +74,7 @@ const Index = () => {
   const [lastPredictionResult, setLastPredictionResult] = useState<'correct' | 'incorrect' | null>(null);
   const [accuracyHistory, setAccuracyHistory] = useState<AccuracyPoint[]>([]);
   const [predictionHistory, setPredictionHistory] = useState<PredictionHistory[]>([]);
+  const [methodHistory, setMethodHistory] = useState<MethodPredictionHistory[]>([]);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -438,6 +457,19 @@ const Index = () => {
             confidence: ensemblePrediction.confidence
           };
           setPredictionHistory(prev => [...prev, predictionRecord]);
+          
+          predictions.forEach(pred => {
+            const methodRecord: MethodPredictionHistory = {
+              id: Date.now() + Math.random(),
+              timestamp: new Date(),
+              methodName: pred.name,
+              prediction: pred.prediction,
+              actual: detectedColumn,
+              isCorrect: pred.prediction === detectedColumn,
+              confidence: pred.confidence
+            };
+            setMethodHistory(prev => [...prev, methodRecord]);
+          });
         }
 
         const newEvent: HistoryEvent = {
@@ -559,6 +591,28 @@ const Index = () => {
     }
   }, [history]);
 
+  const calculateMethodStats = (): MethodStats[] => {
+    const methods = ['Pattern Recognition', 'Frequency Analysis', 'Markov Chain'];
+    
+    return methods.map(methodName => {
+      const methodRecords = methodHistory.filter(h => h.methodName === methodName);
+      const totalPredictions = methodRecords.length;
+      const correctPredictions = methodRecords.filter(h => h.isCorrect).length;
+      const accuracy = totalPredictions > 0 ? (correctPredictions / totalPredictions) * 100 : 0;
+      const avgConfidence = totalPredictions > 0 
+        ? methodRecords.reduce((sum, r) => sum + r.confidence, 0) / totalPredictions 
+        : 0;
+      
+      return {
+        name: methodName,
+        totalPredictions,
+        correctPredictions,
+        accuracy,
+        avgConfidence
+      };
+    }).sort((a, b) => b.accuracy - a.accuracy);
+  };
+
   const handleStart = () => {
     if (!isCapturing) {
       toast({
@@ -608,6 +662,7 @@ const Index = () => {
     setLastPredictionResult(null);
     setAccuracyHistory([]);
     setPredictionHistory([]);
+    setMethodHistory([]);
     setIsPaused(false);
     setIsRunning(false);
     setLastRecognizedText('');
@@ -1277,6 +1332,164 @@ const Index = () => {
             </div>
           </Card>
         )}
+
+        {methodHistory.length > 0 && (() => {
+          const methodStats = calculateMethodStats();
+          const bestMethod = methodStats[0];
+          
+          return (
+            <Card className="bg-white/5 border-white/10 p-5">
+              <div className="flex items-center gap-3 mb-4">
+                <Icon name="BarChart3" size={20} className="text-[#D946EF]" />
+                <h3 className="text-xl font-bold">Статистика методов анализа</h3>
+                {bestMethod && bestMethod.totalPredictions > 0 && (
+                  <Badge className="bg-[#D946EF]/20 text-[#D946EF] border-none">
+                    Лидер: {bestMethod.name === 'Pattern Recognition' ? 'Паттерны' : bestMethod.name === 'Frequency Analysis' ? 'Частота' : 'Марков'}
+                  </Badge>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                {methodStats.map((stat, idx) => (
+                  <Card 
+                    key={stat.name}
+                    className={`p-4 ${
+                      idx === 0 && stat.totalPredictions > 0
+                        ? 'bg-gradient-to-br from-[#D946EF]/20 to-[#8B5CF6]/20 border-[#D946EF]/50'
+                        : 'bg-white/5 border-white/10'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Icon 
+                          name={
+                            stat.name === 'Pattern Recognition' ? 'Repeat' :
+                            stat.name === 'Frequency Analysis' ? 'PieChart' :
+                            'GitBranch'
+                          } 
+                          size={18}
+                          className={idx === 0 && stat.totalPredictions > 0 ? 'text-[#D946EF]' : 'text-gray-400'}
+                        />
+                        <span className="text-sm font-medium">
+                          {stat.name === 'Pattern Recognition' ? 'Паттерны' : 
+                           stat.name === 'Frequency Analysis' ? 'Частота' : 
+                           'Марков'}
+                        </span>
+                      </div>
+                      {idx === 0 && stat.totalPredictions > 0 && (
+                        <Icon name="Trophy" size={18} className="text-yellow-400" />
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-2xl font-bold text-white">
+                          {stat.accuracy.toFixed(1)}%
+                        </span>
+                        <span className="text-xs text-gray-400">точность</span>
+                      </div>
+
+                      <Progress 
+                        value={stat.accuracy} 
+                        className="h-2"
+                      />
+
+                      <div className="grid grid-cols-2 gap-2 pt-2 text-xs">
+                        <div>
+                          <div className="text-gray-400">Прогнозов:</div>
+                          <div className="font-semibold">{stat.totalPredictions}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-400">Верных:</div>
+                          <div className="font-semibold text-green-400">{stat.correctPredictions}</div>
+                        </div>
+                      </div>
+
+                      <div className="pt-2 border-t border-white/10">
+                        <div className="text-gray-400 text-xs">Средняя уверенность:</div>
+                        <div className="font-semibold text-sm">{stat.avgConfidence.toFixed(1)}%</div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+
+              <div className="max-h-96 overflow-y-auto space-y-3">
+                <h4 className="text-sm font-semibold text-gray-400 mb-2">Детальная история по методам</h4>
+                {methodHistory.slice().reverse().map((record, idx) => (
+                  <div 
+                    key={record.id}
+                    className={`p-3 rounded-lg border ${
+                      record.isCorrect 
+                        ? 'bg-green-500/5 border-green-500/20' 
+                        : 'bg-red-500/5 border-red-500/20'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-gray-500 text-xs">#{methodHistory.length - idx}</span>
+                        
+                        <Badge 
+                          variant="outline"
+                          className={`text-xs ${
+                            record.methodName === 'Pattern Recognition' 
+                              ? 'border-blue-500 text-blue-400' 
+                              : record.methodName === 'Frequency Analysis'
+                              ? 'border-green-500 text-green-400'
+                              : 'border-purple-500 text-purple-400'
+                          }`}
+                        >
+                          {record.methodName === 'Pattern Recognition' ? '🔄 Паттерны' : 
+                           record.methodName === 'Frequency Analysis' ? '📊 Частота' : 
+                           '🔀 Марков'}
+                        </Badge>
+
+                        <div className="flex items-center gap-2">
+                          <Badge 
+                            className={`${
+                              record.prediction === 'alpha' 
+                                ? 'bg-[#0EA5E9]' 
+                                : 'bg-[#8B5CF6]'
+                            } text-white border-none text-xs`}
+                          >
+                            {record.prediction === 'alpha' ? 'α' : 'ω'}
+                          </Badge>
+
+                          <Icon 
+                            name="ArrowRight" 
+                            size={14} 
+                            className="text-gray-500"
+                          />
+
+                          <Badge 
+                            className={`${
+                              record.actual === 'alpha' 
+                                ? 'bg-[#0EA5E9]' 
+                                : 'bg-[#8B5CF6]'
+                            } text-white border-none text-xs`}
+                          >
+                            {record.actual === 'alpha' ? 'α' : 'ω'}
+                          </Badge>
+
+                          <Icon 
+                            name={record.isCorrect ? "Check" : "X"} 
+                            size={16} 
+                            className={record.isCorrect ? 'text-green-400' : 'text-red-400'}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3 text-xs text-gray-400">
+                        <span>Уверенность: {record.confidence.toFixed(1)}%</span>
+                        <span>{record.timestamp.toLocaleTimeString('ru-RU')}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          );
+        })()}
 
         <Card className="bg-white/5 border-white/10 p-5">
           <div className="flex items-center gap-3 mb-4">
