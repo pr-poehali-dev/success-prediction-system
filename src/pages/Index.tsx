@@ -145,67 +145,25 @@ const Index = () => {
 
   const startScreenCapture = async () => {
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        toast({
-          title: "Функция недоступна",
-          description: "Захват экрана требует HTTPS или localhost. Откройте сайт по HTTPS.",
-          variant: "destructive"
-        });
-        return;
-      }
-
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          width: { ideal: 1920 },
-          height: { ideal: 1080 }
-        }
+        video: true
       });
 
       setCaptureStream(stream);
 
       if (videoRef.current) {
-        const video = videoRef.current;
-        video.srcObject = stream;
-        video.muted = true;
-        video.playsInline = true;
-        
-        await new Promise<void>((resolve, reject) => {
-          video.onloadedmetadata = () => {
-            video.play()
-              .then(() => resolve())
-              .catch(reject);
-          };
-          video.onerror = reject;
-          
-          setTimeout(() => reject(new Error('Video load timeout')), 5000);
-        });
-        
+        videoRef.current.srcObject = stream;
         setIsCapturing(true);
+        
         toast({
           title: "Захват экрана начат",
           description: "Теперь выберите область для распознавания",
         });
       }
-    } catch (error: any) {
-      console.error('Screen capture error:', error, 'Name:', error?.name, 'Message:', error?.message);
-      
-      let errorMessage = "Не удалось начать захват";
-      
-      if (error.name === 'NotAllowedError') {
-        errorMessage = "Вы отклонили разрешение на захват экрана";
-      } else if (error.name === 'NotSupportedError') {
-        errorMessage = "Захват экрана не поддерживается. Нужен HTTPS.";
-      } else if (error.name === 'NotFoundError') {
-        errorMessage = "Не найдены доступные источники для захвата";
-      } else if (error.name === 'AbortError') {
-        errorMessage = "Захват экрана отменён";
-      } else if (error.message === 'Video load timeout') {
-        errorMessage = "Видео не загрузилось. Попробуйте ещё раз.";
-      }
-      
+    } catch (error) {
       toast({
         title: "Ошибка захвата экрана",
-        description: errorMessage,
+        description: "Не удалось начать захват",
         variant: "destructive"
       });
     }
