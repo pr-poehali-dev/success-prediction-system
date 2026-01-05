@@ -144,17 +144,23 @@ const Index = () => {
   }, [timeLeft, isRunning, isPaused]);
 
   const startScreenCapture = async () => {
+    console.log('startScreenCapture called');
     try {
+      console.log('Requesting display media...');
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: true
       });
+      console.log('Stream received:', stream);
 
       setCaptureStream(stream);
 
       if (videoRef.current) {
+        console.log('Setting video srcObject');
         videoRef.current.srcObject = stream;
         
+        console.log('Playing video...');
         await videoRef.current.play();
+        console.log('Video playing');
         
         setIsCapturing(true);
         
