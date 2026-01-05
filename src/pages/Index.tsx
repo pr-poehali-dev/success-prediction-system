@@ -164,11 +164,21 @@ const Index = () => {
       setCaptureStream(stream);
 
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.muted = true;
-        videoRef.current.playsInline = true;
+        const video = videoRef.current;
+        video.srcObject = stream;
+        video.muted = true;
+        video.playsInline = true;
         
-        await videoRef.current.play();
+        await new Promise<void>((resolve, reject) => {
+          video.onloadedmetadata = () => {
+            video.play()
+              .then(() => resolve())
+              .catch(reject);
+          };
+          video.onerror = reject;
+          
+          setTimeout(() => reject(new Error('Video load timeout')), 5000);
+        });
         
         setIsCapturing(true);
         toast({
@@ -177,7 +187,7 @@ const Index = () => {
         });
       }
     } catch (error: any) {
-      console.error('Screen capture error:', error);
+      console.error('Screen capture error:', error, 'Name:', error?.name, 'Message:', error?.message);
       
       let errorMessage = "Не удалось начать захват";
       
@@ -189,6 +199,8 @@ const Index = () => {
         errorMessage = "Не найдены доступные источники для захвата";
       } else if (error.name === 'AbortError') {
         errorMessage = "Захват экрана отменён";
+      } else if (error.message === 'Video load timeout') {
+        errorMessage = "Видео не загрузилось. Попробуйте ещё раз.";
       }
       
       toast({
