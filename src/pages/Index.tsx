@@ -858,6 +858,103 @@ const Index = () => {
     });
   };
 
+  const exportToJSON = () => {
+    const exportData = {
+      exportDate: new Date().toISOString(),
+      summary: {
+        totalEvents: history.length,
+        recognizedEvents: recognizedHistory.length,
+        totalPredictions: predictionHistory.length,
+        correctPredictions: predictionHistory.filter(p => p.isCorrect).length,
+        overallAccuracy: predictionHistory.length > 0
+          ? (predictionHistory.filter(p => p.isCorrect).length / predictionHistory.length) * 100
+          : 0,
+        alphaCount: recognizedHistory.filter(c => c === 'alpha').length,
+        omegaCount: recognizedHistory.filter(c => c === 'omega').length,
+      },
+      recognizedHistory,
+      fullHistory: history,
+      predictions: predictionHistory,
+      methodPerformance: methodHistory,
+      accuracyOverTime: accuracyHistory,
+      currentWeights: adaptiveWeights,
+      methodStats: getMethodStats()
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `prediction-history-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Экспорт завершён",
+      description: "История сохранена в JSON",
+    });
+  };
+
+  const exportToCSV = () => {
+    const csvRows: string[] = [];
+    
+    csvRows.push('=== РАСПОЗНАННАЯ ИСТОРИЯ ===');
+    csvRows.push('Номер,Колонка,Время');
+    recognizedHistory.forEach((col, idx) => {
+      const event = history.find(h => h.source === 'screen' && history.indexOf(h) >= idx);
+      csvRows.push(`${idx + 1},${col},${event ? event.timestamp.toLocaleString() : 'N/A'}`);
+    });
+
+    csvRows.push('');
+    csvRows.push('=== ИСТОРИЯ ПРОГНОЗОВ ===');
+    csvRows.push('ID,Время,Прогноз,Факт,Результат,Уверенность');
+    predictionHistory.forEach(pred => {
+      csvRows.push(
+        `${pred.id},${pred.timestamp.toLocaleString()},${pred.prediction},${pred.actual},${pred.isCorrect ? 'Верно' : 'Неверно'},${pred.confidence}%`
+      );
+    });
+
+    csvRows.push('');
+    csvRows.push('=== СТАТИСТИКА МЕТОДОВ ===');
+    csvRows.push('Метод,Всего прогнозов,Верных,Точность,Средняя уверенность,Вес');
+    getMethodStats().forEach(stat => {
+      csvRows.push(
+        `${stat.name},${stat.totalPredictions},${stat.correctPredictions},${stat.accuracy.toFixed(2)}%,${stat.avgConfidence.toFixed(2)}%,${stat.weight.toFixed(2)}`
+      );
+    });
+
+    const overallAcc = predictionHistory.length > 0
+      ? (predictionHistory.filter(p => p.isCorrect).length / predictionHistory.length) * 100
+      : 0;
+
+    csvRows.push('');
+    csvRows.push('=== ОБЩАЯ СТАТИСТИКА ===');
+    csvRows.push(`Распознано событий,${recognizedHistory.length}`);
+    csvRows.push(`АЛЬФА,${recognizedHistory.filter(c => c === 'alpha').length}`);
+    csvRows.push(`ОМЕГА,${recognizedHistory.filter(c => c === 'omega').length}`);
+    csvRows.push(`Всего прогнозов,${predictionHistory.length}`);
+    csvRows.push(`Верных прогнозов,${predictionHistory.filter(p => p.isCorrect).length}`);
+    csvRows.push(`Общая точность,${overallAcc.toFixed(2)}%`);
+
+    const csv = csvRows.join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `prediction-history-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Экспорт завершён",
+      description: "История сохранена в CSV",
+    });
+  };
+
   const handleReset = () => {
     setHistory([]);
     setRecognizedHistory([]);
@@ -1269,27 +1366,44 @@ const Index = () => {
             История ({history.length})
           </h2>
 
-          <div className="flex gap-2 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
             <Button 
               onClick={() => addManualEntry('alpha')}
-              className="flex-1 bg-green-600 hover:bg-green-700"
+              className="bg-green-600 hover:bg-green-700"
             >
               <Icon name="Plus" className="mr-2" size={20} />
-              Добавить АЛЬФА
+              АЛЬФА
             </Button>
             
             <Button 
               onClick={() => addManualEntry('omega')}
-              className="flex-1 bg-red-600 hover:bg-red-700"
+              className="bg-red-600 hover:bg-red-700"
             >
               <Icon name="Plus" className="mr-2" size={20} />
-              Добавить ОМЕГА
+              ОМЕГА
+            </Button>
+
+            <Button 
+              onClick={exportToJSON}
+              variant="outline"
+              disabled={history.length === 0}
+            >
+              <Icon name="Download" className="mr-2" size={20} />
+              JSON
+            </Button>
+
+            <Button 
+              onClick={exportToCSV}
+              variant="outline"
+              disabled={history.length === 0}
+            >
+              <Icon name="FileSpreadsheet" className="mr-2" size={20} />
+              CSV
             </Button>
 
             <Button 
               onClick={handleReset}
               variant="outline"
-              className="flex-1"
             >
               <Icon name="RotateCcw" className="mr-2" size={20} />
               Сброс
