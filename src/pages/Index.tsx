@@ -153,6 +153,9 @@ const Index = () => {
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        
+        await videoRef.current.play();
+        
         setIsCapturing(true);
         
         toast({
@@ -161,9 +164,10 @@ const Index = () => {
         });
       }
     } catch (error) {
+      console.error('Screen capture error:', error);
       toast({
         title: "Ошибка захвата экрана",
-        description: "Не удалось начать захват",
+        description: error instanceof Error ? error.message : "Не удалось начать захват",
         variant: "destructive"
       });
     }
