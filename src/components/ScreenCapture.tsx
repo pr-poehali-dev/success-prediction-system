@@ -88,12 +88,22 @@ export const ScreenCapture = ({
   useEffect(() => {
     if (!isCapturing || !videoRef.current || !previewCanvasRef.current) return;
 
+    const video = videoRef.current;
     let animationId: number;
+    let isVideoReady = false;
+
+    const checkVideoReady = () => {
+      if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0 && video.videoHeight > 0) {
+        isVideoReady = true;
+        drawPreview();
+      } else {
+        setTimeout(checkVideoReady, 100);
+      }
+    };
 
     const drawPreview = () => {
-      const video = videoRef.current;
       const canvas = previewCanvasRef.current;
-      if (!video || !canvas) return;
+      if (!canvas || !isVideoReady) return;
 
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
@@ -104,7 +114,12 @@ export const ScreenCapture = ({
       }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(video, 0, 0);
+      
+      try {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      } catch (e) {
+        console.error('Error drawing video:', e);
+      }
 
       if (captureArea) {
         ctx.strokeStyle = '#00ff00';
@@ -118,7 +133,7 @@ export const ScreenCapture = ({
       animationId = requestAnimationFrame(drawPreview);
     };
 
-    drawPreview();
+    checkVideoReady();
 
     return () => {
       if (animationId) {

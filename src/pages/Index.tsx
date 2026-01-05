@@ -146,21 +146,28 @@ const Index = () => {
   const startScreenCapture = async () => {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { mediaSource: 'screen' }
+        video: { 
+          mediaSource: 'screen',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 }
+        }
       });
 
       setCaptureStream(stream);
-      setIsCapturing(true);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play().then(() => {
+            setIsCapturing(true);
+            toast({
+              title: "Захват экрана начат",
+              description: "Теперь выберите область для распознавания",
+            });
+          });
+        };
       }
-
-      toast({
-        title: "Захват экрана начат",
-        description: "Теперь выберите область для распознавания",
-      });
     } catch (error) {
       toast({
         title: "Ошибка захвата экрана",
