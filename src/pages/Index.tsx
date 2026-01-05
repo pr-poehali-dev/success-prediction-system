@@ -165,23 +165,16 @@ const Index = () => {
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.muted = true;
+        videoRef.current.playsInline = true;
         
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play().then(() => {
-            setIsCapturing(true);
-            toast({
-              title: "Захват экрана начат",
-              description: "Теперь выберите область для распознавания",
-            });
-          }).catch(err => {
-            console.error('Video play error:', err);
-            toast({
-              title: "Ошибка воспроизведения",
-              description: "Не удалось запустить видео",
-              variant: "destructive"
-            });
-          });
-        };
+        await videoRef.current.play();
+        
+        setIsCapturing(true);
+        toast({
+          title: "Захват экрана начат",
+          description: "Теперь выберите область для распознавания",
+        });
       }
     } catch (error: any) {
       console.error('Screen capture error:', error);
@@ -194,6 +187,8 @@ const Index = () => {
         errorMessage = "Захват экрана не поддерживается. Нужен HTTPS.";
       } else if (error.name === 'NotFoundError') {
         errorMessage = "Не найдены доступные источники для захвата";
+      } else if (error.name === 'AbortError') {
+        errorMessage = "Захват экрана отменён";
       }
       
       toast({
