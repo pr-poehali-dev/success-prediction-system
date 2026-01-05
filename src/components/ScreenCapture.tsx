@@ -93,33 +93,18 @@ export const ScreenCapture = ({
     let animationId: number;
 
     const drawPreview = () => {
-      if (!video || !canvas) return;
-
       const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      if (!ctx || !video.videoWidth) return;
 
-      if (video.videoWidth > 0 && video.videoHeight > 0) {
-        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-        }
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      
+      ctx.drawImage(video, 0, 0);
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        try {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        } catch (e) {
-          console.error('Error drawing video:', e);
-        }
-
-        if (captureArea) {
-          ctx.strokeStyle = '#00ff00';
-          ctx.lineWidth = 3;
-          ctx.strokeRect(captureArea.x, captureArea.y, captureArea.width, captureArea.height);
-          
-          ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
-          ctx.fillRect(captureArea.x, captureArea.y, captureArea.width, captureArea.height);
-        }
+      if (captureArea) {
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(captureArea.x, captureArea.y, captureArea.width, captureArea.height);
       }
 
       animationId = requestAnimationFrame(drawPreview);
@@ -127,11 +112,7 @@ export const ScreenCapture = ({
 
     drawPreview();
 
-    return () => {
-      if (animationId) {
-        cancelAnimationFrame(animationId);
-      }
-    };
+    return () => cancelAnimationFrame(animationId);
   }, [isCapturing, captureArea]);
 
   return (
