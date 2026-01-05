@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import Icon from '@/components/ui/icon';
+import { toast } from '@/hooks/use-toast';
 import { CaptureArea } from '@/types/prediction';
 
 interface ScreenCaptureProps {
@@ -76,11 +77,18 @@ export const ScreenCapture = ({
     if (isSelectingAreaRef.current && captureArea && captureArea.width > 10 && captureArea.height > 10) {
       isSelectingAreaRef.current = false;
       selectionStartRef.current = null;
+      
+      toast({
+        title: "Область выбрана",
+        description: "Нажмите 'Старт' для начала распознавания",
+      });
     }
   };
 
   useEffect(() => {
     if (!isCapturing || !videoRef.current || !previewCanvasRef.current) return;
+
+    let animationId: number;
 
     const drawPreview = () => {
       const video = videoRef.current;
@@ -90,21 +98,33 @@ export const ScreenCapture = ({
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+      }
 
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(video, 0, 0);
 
       if (captureArea) {
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 3;
         ctx.strokeRect(captureArea.x, captureArea.y, captureArea.width, captureArea.height);
+        
+        ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+        ctx.fillRect(captureArea.x, captureArea.y, captureArea.width, captureArea.height);
       }
 
-      requestAnimationFrame(drawPreview);
+      animationId = requestAnimationFrame(drawPreview);
     };
 
     drawPreview();
+
+    return () => {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+    };
   }, [isCapturing, captureArea, videoRef, previewCanvasRef]);
 
   return (
