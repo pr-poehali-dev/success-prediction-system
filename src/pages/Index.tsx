@@ -146,8 +146,7 @@ const Index = () => {
   const startScreenCapture = async () => {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { 
-          mediaSource: 'screen',
+        video: {
           width: { ideal: 1920 },
           height: { ideal: 1080 }
         }
@@ -169,6 +168,7 @@ const Index = () => {
         };
       }
     } catch (error) {
+      console.error('Screen capture error:', error);
       toast({
         title: "Ошибка захвата экрана",
         description: "Не удалось начать захват",
