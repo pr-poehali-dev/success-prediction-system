@@ -145,6 +145,15 @@ const Index = () => {
 
   const startScreenCapture = async () => {
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        toast({
+          title: "Функция недоступна",
+          description: "Захват экрана требует HTTPS или localhost. Откройте сайт по HTTPS.",
+          variant: "destructive"
+        });
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           width: { ideal: 1920 },
@@ -164,14 +173,32 @@ const Index = () => {
               title: "Захват экрана начат",
               description: "Теперь выберите область для распознавания",
             });
+          }).catch(err => {
+            console.error('Video play error:', err);
+            toast({
+              title: "Ошибка воспроизведения",
+              description: "Не удалось запустить видео",
+              variant: "destructive"
+            });
           });
         };
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Screen capture error:', error);
+      
+      let errorMessage = "Не удалось начать захват";
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage = "Вы отклонили разрешение на захват экрана";
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage = "Захват экрана не поддерживается. Нужен HTTPS.";
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = "Не найдены доступные источники для захвата";
+      }
+      
       toast({
         title: "Ошибка захвата экрана",
-        description: "Не удалось начать захват",
+        description: errorMessage,
         variant: "destructive"
       });
     }
