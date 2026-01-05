@@ -89,58 +89,50 @@ export const ScreenCapture = ({
     if (!isCapturing || !videoRef.current || !previewCanvasRef.current) return;
 
     const video = videoRef.current;
+    const canvas = previewCanvasRef.current;
     let animationId: number;
-    let isVideoReady = false;
-
-    const checkVideoReady = () => {
-      if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0 && video.videoHeight > 0) {
-        isVideoReady = true;
-        drawPreview();
-      } else {
-        setTimeout(checkVideoReady, 100);
-      }
-    };
 
     const drawPreview = () => {
-      const canvas = previewCanvasRef.current;
-      if (!canvas || !isVideoReady) return;
+      if (!video || !canvas) return;
 
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-      }
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      try {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      } catch (e) {
-        console.error('Error drawing video:', e);
-      }
-
-      if (captureArea) {
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(captureArea.x, captureArea.y, captureArea.width, captureArea.height);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
-        ctx.fillRect(captureArea.x, captureArea.y, captureArea.width, captureArea.height);
+        try {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        } catch (e) {
+          console.error('Error drawing video:', e);
+        }
+
+        if (captureArea) {
+          ctx.strokeStyle = '#00ff00';
+          ctx.lineWidth = 3;
+          ctx.strokeRect(captureArea.x, captureArea.y, captureArea.width, captureArea.height);
+          
+          ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+          ctx.fillRect(captureArea.x, captureArea.y, captureArea.width, captureArea.height);
+        }
       }
 
       animationId = requestAnimationFrame(drawPreview);
     };
 
-    checkVideoReady();
+    drawPreview();
 
     return () => {
       if (animationId) {
         cancelAnimationFrame(animationId);
       }
     };
-  }, [isCapturing, captureArea, videoRef, previewCanvasRef]);
+  }, [isCapturing, captureArea]);
 
   return (
     <Card className="bg-slate-800/50 border-purple-500/30 p-6">
