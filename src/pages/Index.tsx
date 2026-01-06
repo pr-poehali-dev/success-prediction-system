@@ -256,43 +256,56 @@ const Index = () => {
     );
 
     const data = imageData.data;
-    let totalR = 0, totalG = 0, totalB = 0, pixelCount = 0;
+    let cyanPixels = 0;
+    let purplePixels = 0;
+    let totalPixels = 0;
 
+    // Анализируем каждый пиксель на наличие голубого или фиолетового текста
     for (let i = 0; i < data.length; i += 4) {
-      totalR += data[i];
-      totalG += data[i + 1];
-      totalB += data[i + 2];
-      pixelCount++;
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      
+      // Пропускаем очень темные (фон) и очень светлые (белый фон) пиксели
+      const brightness = (r + g + b) / 3;
+      if (brightness < 50 || brightness > 240) continue;
+      
+      totalPixels++;
+      
+      // Голубой текст (Cyan): высокие G и B, низкий R
+      // Типичный голубой: RGB(0, 200-255, 200-255)
+      if (g > 150 && b > 150 && r < 100 && g > r + 50 && b > r + 50) {
+        cyanPixels++;
+      }
+      
+      // Фиолетовый текст (Purple/Magenta): высокие R и B, низкий G
+      // Типичный фиолетовый: RGB(150-255, 0-100, 150-255)
+      if (r > 150 && b > 150 && g < 100 && r > g + 50 && b > g + 50) {
+        purplePixels++;
+      }
     }
 
-    const avgR = totalR / pixelCount;
-    const avgG = totalG / pixelCount;
-    const avgB = totalB / pixelCount;
-
-    const brightness = (avgR + avgG + avgB) / 3;
-
-    if (brightness < 30) {
-      setLastRecognizedText('Темный экран');
+    // Если недостаточно цветных пикселей для анализа
+    if (totalPixels < 10) {
+      setLastRecognizedText('Недостаточно данных для распознавания');
       return null;
     }
 
-    // Голубой (Cyan) - высокие G и B, низкий R → АЛЬФА
-    const isCyan = avgG > 100 && avgB > 100 && avgG > avgR && avgB > avgR;
-    
-    // Фиолетовый (Magenta/Purple) - высокие R и B, низкий G → ОМЕГА
-    const isPurple = avgR > 100 && avgB > 100 && avgR > avgG && avgB > avgG;
+    const cyanPercentage = (cyanPixels / totalPixels) * 100;
+    const purplePercentage = (purplePixels / totalPixels) * 100;
 
-    if (isCyan) {
-      setLastRecognizedText('Обнаружен голубой → АЛЬФА');
+    // Нужно хотя бы 5% пикселей нужного цвета
+    if (cyanPixels > purplePixels && cyanPercentage > 5) {
+      setLastRecognizedText(`Обнаружен голубой текст (${cyanPercentage.toFixed(1)}%) → АЛЬФА`);
       return 'alpha';
     }
 
-    if (isPurple) {
-      setLastRecognizedText('Обнаружен фиолетовый → ОМЕГА');
+    if (purplePixels > cyanPixels && purplePercentage > 5) {
+      setLastRecognizedText(`Обнаружен фиолетовый текст (${purplePercentage.toFixed(1)}%) → ОМЕГА`);
       return 'omega';
     }
 
-    setLastRecognizedText(`RGB: ${avgR.toFixed(0)}, ${avgG.toFixed(0)}, ${avgB.toFixed(0)}`);
+    setLastRecognizedText(`Голубой: ${cyanPercentage.toFixed(1)}%, Фиолетовый: ${purplePercentage.toFixed(1)}%`);
     return null;
   };
 
