@@ -96,17 +96,26 @@ export const ScreenCapture = ({
 
     const drawPreview = () => {
       const ctx = canvas.getContext('2d');
-      if (!ctx || !video.videoWidth) return;
+      if (!ctx) {
+        animationId = requestAnimationFrame(drawPreview);
+        return;
+      }
 
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      
-      ctx.drawImage(video, 0, 0);
+      if (video.videoWidth && video.videoHeight) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        
+        ctx.drawImage(video, 0, 0);
 
-      if (captureArea) {
-        ctx.strokeStyle = '#00ff00';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(captureArea.x, captureArea.y, captureArea.width, captureArea.height);
+        if (captureArea) {
+          ctx.strokeStyle = '#00ff00';
+          ctx.lineWidth = 4;
+          ctx.strokeRect(captureArea.x, captureArea.y, captureArea.width, captureArea.height);
+          
+          // Полупрозрачная заливка
+          ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+          ctx.fillRect(captureArea.x, captureArea.y, captureArea.width, captureArea.height);
+        }
       }
 
       animationId = requestAnimationFrame(drawPreview);
@@ -198,37 +207,70 @@ export const ScreenCapture = ({
                   </div>
                 </div>
               )}
+              
+              {!isRunning && captureArea && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 pointer-events-none">
+                  <div className="bg-green-600/90 px-4 py-2 rounded-lg shadow-lg animate-pulse">
+                    <div className="text-white text-center flex items-center gap-2">
+                      <Icon name="CheckCircle" className="text-white" size={20} />
+                      <p className="text-sm font-semibold">Область выбрана! Нажмите "Начать захват"</p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="flex gap-2">
+            {!isRunning && captureArea && (
               <Button 
                 onClick={onPauseResume}
-                className={`flex-1 ${isPaused ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}`}
-                disabled={!captureArea}
+                className="w-full bg-green-600 hover:bg-green-700 text-lg py-6"
+                size="lg"
               >
-                <Icon name={isPaused ? "Play" : isRunning ? "Pause" : "Play"} className="mr-2" size={20} />
-                {isPaused ? 'Продолжить' : isRunning ? 'Пауза' : 'Старт'}
+                <Icon name="Play" className="mr-2" size={24} />
+                Начать захват
               </Button>
-              
-              <Button 
-                onClick={onStop}
-                variant="destructive"
-                className="flex-1"
-                disabled={!isRunning}
-              >
-                <Icon name="Square" className="mr-2" size={20} />
-                Стоп
-              </Button>
+            )}
 
+            {isRunning && (
+              <div className="flex gap-2">
+                <Button 
+                  onClick={onPauseResume}
+                  className={`flex-1 ${isPaused ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+                >
+                  <Icon name={isPaused ? "Play" : "Pause"} className="mr-2" size={20} />
+                  {isPaused ? 'Продолжить' : 'Пауза'}
+                </Button>
+                
+                <Button 
+                  onClick={onStop}
+                  variant="destructive"
+                  className="flex-1"
+                >
+                  <Icon name="Square" className="mr-2" size={20} />
+                  Стоп
+                </Button>
+
+                <Button 
+                  onClick={onStopCapture}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  <Icon name="X" className="mr-2" size={20} />
+                  Завершить
+                </Button>
+              </div>
+            )}
+            
+            {!isRunning && (
               <Button 
                 onClick={onStopCapture}
                 variant="outline"
-                className="flex-1"
+                className="w-full"
               >
                 <Icon name="X" className="mr-2" size={20} />
-                Завершить
+                Завершить захват экрана
               </Button>
-            </div>
+            )}
 
             {lastRecognizedText && (
               <div className="bg-slate-700/50 p-3 rounded-lg">
