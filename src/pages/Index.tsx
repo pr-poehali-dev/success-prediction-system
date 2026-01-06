@@ -174,6 +174,14 @@ const Index = () => {
 
       setCaptureStream(stream);
       addLog('✅ Stream сохранён в state');
+      
+      // Сначала включаем isCapturing, чтобы видео появилось в DOM
+      setIsCapturing(true);
+      addLog('✅ isCapturing = true');
+
+      // Ждём следующий кадр, чтобы React отрендерил видео
+      await new Promise(resolve => setTimeout(resolve, 100));
+      addLog('⏳ Ожидание рендеринга видео-элемента...');
 
       if (videoRef.current) {
         addLog('✅ videoRef существует');
@@ -183,16 +191,14 @@ const Index = () => {
         await videoRef.current.play();
         addLog('✅ video.play() выполнен');
         
-        setIsCapturing(true);
-        addLog('✅ isCapturing = true');
-        
         toast({
           title: "Захват экрана начат",
           description: "Теперь выберите область для распознавания",
         });
         addLog('🎉 Захват экрана успешно запущен!');
       } else {
-        addLog('❌ videoRef.current === null');
+        addLog('❌ videoRef.current === null даже после ожидания');
+        addLog(`📊 isCapturing: ${isCapturing}, stream: ${!!stream}`);
       }
 
       stream.getVideoTracks()[0].onended = () => {
