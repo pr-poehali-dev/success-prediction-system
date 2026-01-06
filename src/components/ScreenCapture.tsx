@@ -190,11 +190,11 @@ export const ScreenCapture = ({
                 onMouseUp={handleCanvasMouseUp}
               />
               
-              {!isRunning && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/50 pointer-events-none">
-                  <div className="text-white text-center">
-                    <Icon name="MousePointer" className="mx-auto mb-2 text-purple-400" size={48} />
-                    <p className="text-lg">Выделите область для анализа</p>
+              {!isRunning && !captureArea && (
+                <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-purple-600/90 px-4 py-2 rounded-lg pointer-events-none shadow-lg">
+                  <div className="text-white text-center flex items-center gap-2">
+                    <Icon name="MousePointer" className="text-white" size={20} />
+                    <p className="text-sm font-semibold">Выделите область мышкой</p>
                   </div>
                 </div>
               )}
