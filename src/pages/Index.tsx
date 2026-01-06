@@ -144,36 +144,62 @@ const Index = () => {
   }, [timeLeft, isRunning, isPaused]);
 
   const startScreenCapture = async () => {
-    console.log('startScreenCapture called');
     try {
-      console.log('Requesting display media...');
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+        toast({
+          title: "Браузер не поддерживает захват экрана",
+          description: "Попробуйте использовать Chrome или обновите браузер",
+          variant: "destructive"
+        });
+        return;
+      }
+
       const stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true
+        video: {
+          displaySurface: "monitor",
+        },
+        audio: false
       });
-      console.log('Stream received:', stream);
 
       setCaptureStream(stream);
 
       if (videoRef.current) {
-        console.log('Setting video srcObject');
         videoRef.current.srcObject = stream;
-        
-        console.log('Playing video...');
         await videoRef.current.play();
-        console.log('Video playing');
-        
         setIsCapturing(true);
         
         toast({
-          title: "Захват экрана начат",
-          description: "Теперь выберите область для распознавания",
+          title: "✅ Захват экрана начат",
+          description: "Выделите область мышкой для анализа",
         });
       }
-    } catch (error) {
+
+      stream.getVideoTracks()[0].addEventListener('ended', () => {
+        stopScreenCapture();
+        toast({
+          title: "Захват экрана остановлен",
+          description: "Пользователь завершил демонстрацию",
+        });
+      });
+
+    } catch (error: any) {
       console.error('Screen capture error:', error);
+      
+      let errorMessage = "Не удалось начать захват экрана";
+      
+      if (error.name === 'NotAllowedError') {
+        errorMessage = "Вы отклонили разрешение. Нажмите 'Поделиться' в окне браузера";
+      } else if (error.name === 'NotFoundError') {
+        errorMessage = "Не выбран источник захвата";
+      } else if (error.name === 'NotSupportedError') {
+        errorMessage = "Захват экрана не поддерживается в этом браузере";
+      } else if (error.name === 'AbortError') {
+        errorMessage = "Захват был прерван";
+      }
+      
       toast({
         title: "Ошибка захвата экрана",
-        description: error instanceof Error ? error.message : "Не удалось начать захват",
+        description: errorMessage,
         variant: "destructive"
       });
     }
