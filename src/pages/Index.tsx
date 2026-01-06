@@ -349,58 +349,43 @@ const Index = () => {
 
   const analyzeColorPattern = (imageData: ImageData): string => {
     const data = imageData.data;
-    const totalPixels = data.length / 4;
-
-    let blueScore = 0;
+    let cyanScore = 0;
     let purpleScore = 0;
-    let cyanoCount = 0;
-    let purpleCount = 0;
+    let pixelCount = 0;
 
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
-
-      const brightness = (r + g + b) / 3;
-      if (brightness < 30) continue;
-
-      const isBlue = b > 150 && b > r * 1.3 && b > g * 1.1 && g > r * 0.8;
-      const isCyan = b > 120 && g > 100 && b > r * 1.5 && Math.abs(b - g) < 80;
       
-      const isPurple = b > 100 && r > 80 && b > g * 1.2 && r > g * 0.9 && Math.abs(r - b) < 100;
-      const isMagenta = r > 100 && b > 100 && b > g * 1.3 && r > g * 1.2;
-
-      if (isBlue || isCyan) {
-        cyanoCount++;
-        blueScore += (b - r) + (b - g);
+      const brightness = r + g + b;
+      if (brightness < 100 || brightness > 650) continue;
+      
+      pixelCount++;
+      
+      const cyanness = (g + b) / 2 - r;
+      if (cyanness > 30 && b > 80) {
+        cyanScore += cyanness;
       }
-
-      if (isPurple || isMagenta) {
-        purpleCount++;
-        purpleScore += (r + b - g * 2) + Math.abs(r - b);
+      
+      const purpleness = (r + b) / 2 - g;
+      if (purpleness > 30 && b > 80) {
+        purpleScore += purpleness;
       }
     }
 
-    const cyanRatio = cyanoCount / totalPixels;
-    const purpleRatio = purpleCount / totalPixels;
-
-    if (cyanRatio > 0.05) {
-      blueScore += cyanRatio * 10000;
-    }
-    if (purpleRatio > 0.05) {
-      purpleScore += purpleRatio * 10000;
+    if (pixelCount < 50) {
+      return 'unknown';
     }
 
-    const minThreshold = 500;
-    const confidence = Math.abs(blueScore - purpleScore);
+    const avgCyan = cyanScore / pixelCount;
+    const avgPurple = purpleScore / pixelCount;
 
-    if (blueScore > minThreshold && blueScore > purpleScore && confidence > 300) {
+    if (avgCyan > 15 && avgCyan > avgPurple * 1.2) {
       return 'alpha';
-    } else if (purpleScore > minThreshold && purpleScore > blueScore && confidence > 300) {
-      return 'omega';
-    } else if (blueScore > purpleScore && blueScore > minThreshold * 0.5) {
-      return 'alpha';
-    } else if (purpleScore > blueScore && purpleScore > minThreshold * 0.5) {
+    }
+
+    if (avgPurple > 15 && avgPurple > avgCyan * 1.2) {
       return 'omega';
     }
 
