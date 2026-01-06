@@ -256,9 +256,9 @@ const Index = () => {
     );
 
     const data = imageData.data;
-    let cyanScore = 0;
-    let purpleScore = 0;
-    let analyzedPixels = 0;
+    let cyanPixels = 0;
+    let purplePixels = 0;
+    let totalPixels = 0;
 
     // Анализируем каждый пиксель
     for (let i = 0; i < data.length; i += 4) {
@@ -268,40 +268,39 @@ const Index = () => {
       
       // Пропускаем почти чёрные и почти белые пиксели (фон)
       const brightness = r + g + b;
-      if (brightness < 100 || brightness > 650) continue;
+      if (brightness < 80 || brightness > 700) continue;
       
-      analyzedPixels++;
+      totalPixels++;
       
-      // Голубой (Cyan) - когда синий и зелёный намного выше красного
-      // Например: RGB(0, 255, 255) или RGB(100, 200, 255)
-      const cyanness = (g + b) / 2 - r;
-      if (cyanness > 80 && b > 120) {
-        cyanScore += cyanness;
+      // Голубой (Cyan/Blue) - когда синий и зелёный выше красного
+      // RGB примеры: (0,255,255), (100,200,255), (50,150,200)
+      if (b > r + 30 && g > r + 20) {
+        cyanPixels++;
       }
       
-      // Фиолетовый (Purple/Magenta) - когда красный и синий намного выше зелёного
-      // Например: RGB(255, 0, 255) или RGB(200, 100, 255)
-      const purpleness = (r + b) / 2 - g;
-      if (purpleness > 80 && b > 120) {
-        purpleScore += purpleness;
+      // Фиолетовый (Purple/Magenta) - когда красный и синий выше зелёного
+      // RGB примеры: (255,0,255), (200,100,255), (180,80,200)
+      if (r > g + 30 && b > g + 30) {
+        purplePixels++;
       }
     }
 
-    if (analyzedPixels < 50) {
-      setLastRecognizedText('Мало данных для анализа');
+    if (totalPixels < 100) {
+      setLastRecognizedText('Мало пикселей для анализа');
       return null;
     }
 
-    const cyanAvg = cyanScore / analyzedPixels;
-    const purpleAvg = purpleScore / analyzedPixels;
+    const cyanPercent = (cyanPixels / totalPixels) * 100;
+    const purplePercent = (purplePixels / totalPixels) * 100;
 
-    setLastRecognizedText(`Голубой: ${cyanAvg.toFixed(1)}, Фиолетовый: ${purpleAvg.toFixed(1)}, Пикселей: ${analyzedPixels}`);
+    setLastRecognizedText(`🔵 Голубой: ${cyanPercent.toFixed(1)}% (${cyanPixels} пикс.) | 🟣 Фиолетовый: ${purplePercent.toFixed(1)}% (${purplePixels} пикс.) | Всего: ${totalPixels}`);
 
-    if (cyanAvg > 30 && cyanAvg > purpleAvg) {
+    // Победитель - у кого больше процент пикселей (минимум 5%)
+    if (cyanPercent > 5 && cyanPercent > purplePercent) {
       return 'alpha';
     }
 
-    if (purpleAvg > 30 && purpleAvg > cyanAvg) {
+    if (purplePercent > 5 && purplePercent > cyanPercent) {
       return 'omega';
     }
 
