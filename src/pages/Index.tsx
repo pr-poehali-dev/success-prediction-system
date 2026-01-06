@@ -264,10 +264,8 @@ const Index = () => {
     );
 
     const data = imageData.data;
-    let cyanPixels = 0;
-    let purplePixels = 0;
-    let cyanIntensity = 0;
-    let purpleIntensity = 0;
+    let cyanScore = 0;
+    let purpleScore = 0;
     let totalAnalyzed = 0;
 
     for (let i = 0; i < data.length; i += 4) {
@@ -280,20 +278,20 @@ const Index = () => {
       
       totalAnalyzed++;
       
-      const isCyan = b > 100 && g > 80 && b > r * 1.3 && g > r * 0.8;
-      const isCyanBlue = b > 120 && g > 60 && b > r + 40 && g > r + 20;
+      const greenBlueAvg = (g + b) / 2;
+      const redBlueAvg = (r + b) / 2;
       
-      const isPurple = r > 80 && b > 80 && r > g * 1.2 && b > g * 1.2;
-      const isMagenta = r > 100 && b > 100 && Math.abs(r - b) < 60 && r > g + 30 && b > g + 30;
+      const cyanSignature = greenBlueAvg - r;
+      const purpleSignature = redBlueAvg - g;
       
-      if (isCyan || isCyanBlue) {
-        cyanPixels++;
-        cyanIntensity += (b + g - r * 2);
-      }
-      
-      if (isPurple || isMagenta) {
-        purplePixels++;
-        purpleIntensity += (r + b - g * 2);
+      if (b > 100) {
+        if (g > r + 20 && cyanSignature > 40) {
+          cyanScore += cyanSignature;
+        }
+        
+        if (r > g + 20 && purpleSignature > 40) {
+          purpleScore += purpleSignature;
+        }
       }
     }
 
@@ -302,29 +300,26 @@ const Index = () => {
       return null;
     }
 
-    const cyanPercent = (cyanPixels / totalAnalyzed) * 100;
-    const purplePercent = (purplePixels / totalAnalyzed) * 100;
-    const avgCyanIntensity = cyanPixels > 0 ? cyanIntensity / cyanPixels : 0;
-    const avgPurpleIntensity = purplePixels > 0 ? purpleIntensity / purplePixels : 0;
+    const avgCyan = cyanScore / totalAnalyzed;
+    const avgPurple = purpleScore / totalAnalyzed;
 
     setLastRecognizedText(
-      `🔵 Голубой: ${cyanPercent.toFixed(1)}% (${cyanPixels} пикс, яркость ${avgCyanIntensity.toFixed(0)}) | ` +
-      `🟣 Фиолетовый: ${purplePercent.toFixed(1)}% (${purplePixels} пикс, яркость ${avgPurpleIntensity.toFixed(0)})`
+      `🔵 Голубой: ${avgCyan.toFixed(1)} очков | 🟣 Фиолетовый: ${avgPurple.toFixed(1)} очков | Всего: ${totalAnalyzed} пикс`
     );
 
-    if (cyanPercent > 3 && cyanPixels > purplePixels && avgCyanIntensity > avgPurpleIntensity) {
+    if (avgCyan > 10 && avgCyan > avgPurple * 1.3) {
       return 'alpha';
     }
 
-    if (purplePercent > 3 && purplePixels > cyanPixels && avgPurpleIntensity > avgCyanIntensity) {
+    if (avgPurple > 10 && avgPurple > avgCyan * 1.3) {
       return 'omega';
     }
 
-    if (cyanPixels > purplePixels * 1.5 && cyanPercent > 2) {
+    if (avgCyan > 5 && avgCyan > avgPurple) {
       return 'alpha';
     }
 
-    if (purplePixels > cyanPixels * 1.5 && purplePercent > 2) {
+    if (avgPurple > 5 && avgPurple > avgCyan) {
       return 'omega';
     }
 
