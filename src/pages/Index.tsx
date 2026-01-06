@@ -148,57 +148,77 @@ const Index = () => {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
         toast({
           title: "Браузер не поддерживает захват экрана",
-          description: "Попробуйте использовать Chrome или обновите браузер",
+          description: "Попробуйте использовать Chrome, Firefox или Edge",
           variant: "destructive"
         });
         return;
       }
 
+      toast({
+        title: "Выберите экран",
+        description: "Сейчас откроется окно выбора - нажмите 'Поделиться'",
+      });
+
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
-          displaySurface: "monitor",
-        },
-        audio: false
+          cursor: "never"
+        }
       });
+
+      if (!stream || !stream.getVideoTracks().length) {
+        throw new Error("Не удалось получить видеопоток");
+      }
 
       setCaptureStream(stream);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        setIsCapturing(true);
         
-        toast({
-          title: "✅ Захват экрана начат",
-          description: "Выделите область мышкой для анализа",
-        });
+        videoRef.current.onloadedmetadata = async () => {
+          try {
+            await videoRef.current!.play();
+            setIsCapturing(true);
+            
+            toast({
+              title: "✅ Захват начат!",
+              description: "Теперь выделите область мышкой",
+            });
+          } catch (playError) {
+            console.error('Play error:', playError);
+            throw new Error("Не удалось воспроизвести видео");
+          }
+        };
       }
 
-      stream.getVideoTracks()[0].addEventListener('ended', () => {
+      stream.getVideoTracks()[0].onended = () => {
         stopScreenCapture();
         toast({
-          title: "Захват экрана остановлен",
-          description: "Пользователь завершил демонстрацию",
+          title: "Захват остановлен",
+          description: "Демонстрация экрана завершена",
         });
-      });
+      };
 
     } catch (error: any) {
       console.error('Screen capture error:', error);
       
-      let errorMessage = "Не удалось начать захват экрана";
+      let errorTitle = "Ошибка захвата экрана";
+      let errorMessage = "";
       
-      if (error.name === 'NotAllowedError') {
-        errorMessage = "Вы отклонили разрешение. Нажмите 'Поделиться' в окне браузера";
+      if (error.name === 'NotAllowedError' || error.message.includes('denied')) {
+        errorTitle = "Доступ запрещен";
+        errorMessage = "Нажмите 'Поделиться' в окне браузера. Если окно не появилось - разблокируйте всплывающие окна для этого сайта";
       } else if (error.name === 'NotFoundError') {
-        errorMessage = "Не выбран источник захвата";
+        errorMessage = "Не выбран источник. Попробуйте ещё раз и выберите экран/окно";
       } else if (error.name === 'NotSupportedError') {
-        errorMessage = "Захват экрана не поддерживается в этом браузере";
+        errorMessage = "Яндекс.Браузер может блокировать эту функцию. Используйте Chrome: chrome://settings/content/screenCapture";
       } else if (error.name === 'AbortError') {
-        errorMessage = "Захват был прерван";
+        errorMessage = "Вы отменили выбор экрана";
+      } else {
+        errorMessage = error.message || "Неизвестная ошибка. Попробуйте обновить страницу";
       }
       
       toast({
-        title: "Ошибка захвата экрана",
+        title: errorTitle,
         description: errorMessage,
         variant: "destructive"
       });

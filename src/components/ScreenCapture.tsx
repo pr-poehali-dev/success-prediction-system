@@ -124,13 +124,25 @@ export const ScreenCapture = ({
 
       <div className="space-y-4">
         {!isCapturing ? (
-          <Button 
-            onClick={onStartCapture}
-            className="w-full bg-blue-600 hover:bg-blue-700"
-          >
-            <Icon name="ScreenShare" className="mr-2" size={20} />
-            Начать захват экрана
-          </Button>
+          <>
+            <div className="bg-yellow-900/30 border border-yellow-600/50 rounded-lg p-4 mb-4">
+              <div className="flex items-start gap-2">
+                <Icon name="AlertTriangle" className="text-yellow-400 flex-shrink-0 mt-1" size={20} />
+                <div className="text-sm text-yellow-200">
+                  <p className="font-semibold mb-1">Для Яндекс.Браузера:</p>
+                  <p>Если окно выбора не появляется - откройте сайт в <strong>Chrome</strong> или <strong>Edge</strong>. Яндекс.Браузер может блокировать захват экрана.</p>
+                </div>
+              </div>
+            </div>
+            
+            <Button 
+              onClick={onStartCapture}
+              className="w-full bg-blue-600 hover:bg-blue-700"
+            >
+              <Icon name="ScreenShare" className="mr-2" size={20} />
+              Начать захват экрана
+            </Button>
+          </>
         ) : (
           <>
             <div className="relative bg-black rounded-lg overflow-hidden" style={{ aspectRatio: '16/9' }}>
