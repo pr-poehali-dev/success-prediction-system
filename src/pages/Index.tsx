@@ -276,13 +276,19 @@ const Index = () => {
       return null;
     }
 
-    if (avgG > avgR && avgG > avgB && avgG > 100) {
-      setLastRecognizedText('Обнаружен зеленый → АЛЬФА');
+    // Голубой (Cyan) - высокие G и B, низкий R → АЛЬФА
+    const isCyan = avgG > 100 && avgB > 100 && avgG > avgR && avgB > avgR;
+    
+    // Фиолетовый (Magenta/Purple) - высокие R и B, низкий G → ОМЕГА
+    const isPurple = avgR > 100 && avgB > 100 && avgR > avgG && avgB > avgG;
+
+    if (isCyan) {
+      setLastRecognizedText('Обнаружен голубой → АЛЬФА');
       return 'alpha';
     }
 
-    if (avgR > avgG && avgR > avgB && avgR > 100) {
-      setLastRecognizedText('Обнаружен красный → ОМЕГА');
+    if (isPurple) {
+      setLastRecognizedText('Обнаружен фиолетовый → ОМЕГА');
       return 'omega';
     }
 
