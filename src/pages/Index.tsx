@@ -47,6 +47,7 @@ const Index = () => {
   const [captureStream, setCaptureStream] = useState<MediaStream | null>(null);
   const [captureArea, setCaptureArea] = useState<CaptureArea | null>(null);
   const [lastRecognizedText, setLastRecognizedText] = useState<string>('');
+  const [captureLogs, setCaptureLogs] = useState<string[]>([]);
   const [adaptiveWeights, setAdaptiveWeights] = useState<AdaptiveWeights>({
     pattern: 1.0,
     frequency: 1.0,
@@ -143,34 +144,72 @@ const Index = () => {
     }
   }, [timeLeft, isRunning, isPaused]);
 
+  const addLog = (message: string) => {
+    const timestamp = new Date().toLocaleTimeString();
+    setCaptureLogs(prev => [...prev, `[${timestamp}] ${message}`]);
+  };
+
   const startScreenCapture = async () => {
+    setCaptureLogs([]);
+    addLog('🚀 Начинаем захват экрана...');
+    
     try {
+      addLog('✅ Проверка navigator.mediaDevices');
+      if (!navigator.mediaDevices) {
+        addLog('❌ navigator.mediaDevices недоступен');
+        throw new Error('MediaDevices не поддерживается');
+      }
+      
+      addLog('✅ Проверка getDisplayMedia');
+      if (!navigator.mediaDevices.getDisplayMedia) {
+        addLog('❌ getDisplayMedia не поддерживается');
+        throw new Error('getDisplayMedia не поддерживается');
+      }
+      
+      addLog('📡 Запрос разрешения на захват экрана...');
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: true
       });
+      addLog('✅ Разрешение получено, stream создан');
 
       setCaptureStream(stream);
+      addLog('✅ Stream сохранён в state');
 
       if (videoRef.current) {
+        addLog('✅ videoRef существует');
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        addLog('✅ srcObject установлен');
+        
+        await videoRef.current.play();
+        addLog('✅ video.play() выполнен');
+        
         setIsCapturing(true);
+        addLog('✅ isCapturing = true');
         
         toast({
           title: "Захват экрана начат",
           description: "Теперь выберите область для распознавания",
         });
+        addLog('🎉 Захват экрана успешно запущен!');
+      } else {
+        addLog('❌ videoRef.current === null');
       }
 
       stream.getVideoTracks()[0].onended = () => {
+        addLog('⚠️ Пользователь остановил захват');
         stopScreenCapture();
       };
 
-    } catch (error) {
+    } catch (error: any) {
+      addLog(`❌ ОШИБКА: ${error.name || 'Unknown'}`);
+      addLog(`📝 Сообщение: ${error.message || 'Нет описания'}`);
+      addLog(`🔍 Тип: ${typeof error}`);
+      addLog(`📦 JSON: ${JSON.stringify(error, null, 2)}`);
+      
       console.error('Screen capture error:', error);
       toast({
         title: "Ошибка захвата экрана",
-        description: "Не удалось начать захват. Попробуйте ещё раз.",
+        description: `${error.name}: ${error.message}`,
         variant: "destructive"
       });
     }
@@ -609,6 +648,7 @@ const Index = () => {
             isPaused={isPaused}
             captureArea={captureArea}
             lastRecognizedText={lastRecognizedText}
+            captureLogs={captureLogs}
             onStartCapture={startScreenCapture}
             onStopCapture={stopScreenCapture}
             onPauseResume={handlePauseResume}

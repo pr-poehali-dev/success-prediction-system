@@ -11,6 +11,7 @@ interface ScreenCaptureProps {
   isPaused: boolean;
   captureArea: CaptureArea | null;
   lastRecognizedText: string;
+  captureLogs: string[];
   onStartCapture: () => void;
   onStopCapture: () => void;
   onPauseResume: () => void;
@@ -27,6 +28,7 @@ export const ScreenCapture = ({
   isPaused,
   captureArea,
   lastRecognizedText,
+  captureLogs,
   onStartCapture,
   onStopCapture,
   onPauseResume,
@@ -151,6 +153,20 @@ export const ScreenCapture = ({
             <div className="text-center text-slate-400 text-sm">
               <p>💬 Помощь: <a href="https://t.me/+QgiLIa1gFRY4Y2Iy" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline">Telegram-сообщество</a></p>
             </div>
+            
+            {captureLogs.length > 0 && (
+              <div className="bg-slate-900/80 border border-purple-500/30 rounded-lg p-3 mt-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Icon name="Terminal" className="text-green-400" size={16} />
+                  <span className="text-xs font-mono text-green-400">Логи диагностики</span>
+                </div>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {captureLogs.map((log, idx) => (
+                    <div key={idx} className="text-xs font-mono text-slate-300">{log}</div>
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         ) : (
           <>
