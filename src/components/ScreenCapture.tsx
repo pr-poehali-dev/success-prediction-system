@@ -12,6 +12,7 @@ interface ScreenCaptureProps {
   captureArea: CaptureArea | null;
   lastRecognizedText: string;
   captureLogs: string[];
+  timeLeft: number;
   onStartCapture: () => void;
   onStopCapture: () => void;
   onPauseResume: () => void;
@@ -29,6 +30,7 @@ export const ScreenCapture = ({
   captureArea,
   lastRecognizedText,
   captureLogs,
+  timeLeft,
   onStartCapture,
   onStopCapture,
   onPauseResume,
@@ -232,33 +234,54 @@ export const ScreenCapture = ({
             )}
 
             {isRunning && (
-              <div className="flex gap-2">
-                <Button 
-                  onClick={onPauseResume}
-                  className={`flex-1 ${isPaused ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}`}
-                >
-                  <Icon name={isPaused ? "Play" : "Pause"} className="mr-2" size={20} />
-                  {isPaused ? 'Продолжить' : 'Пауза'}
-                </Button>
-                
-                <Button 
-                  onClick={onStop}
-                  variant="destructive"
-                  className="flex-1"
-                >
-                  <Icon name="Square" className="mr-2" size={20} />
-                  Стоп
-                </Button>
+              <>
+                <div className="bg-gradient-to-r from-cyan-900/60 to-purple-900/60 p-4 rounded-xl border-2 border-cyan-400/50 shadow-xl">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-cyan-500/30 p-2 rounded-full animate-pulse">
+                        <Icon name="Clock" className="text-cyan-300" size={24} />
+                      </div>
+                      <div>
+                        <p className="text-slate-300 text-xs font-medium">СЛЕДУЮЩЕЕ РАСПОЗНАВАНИЕ ЧЕРЕЗ</p>
+                        <p className="text-slate-400 text-xs">Каждые 30 секунд автоматически</p>
+                      </div>
+                    </div>
+                    <div className={`text-6xl font-bold tabular-nums ${
+                      timeLeft <= 10 ? 'text-yellow-300 animate-pulse' : 'text-white'
+                    }`}>
+                      {timeLeft}
+                    </div>
+                  </div>
+                </div>
 
-                <Button 
-                  onClick={onStopCapture}
-                  variant="outline"
-                  className="flex-1"
-                >
-                  <Icon name="X" className="mr-2" size={20} />
-                  Завершить
-                </Button>
-              </div>
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={onPauseResume}
+                    className={`flex-1 ${isPaused ? 'bg-green-600 hover:bg-green-700' : 'bg-purple-600 hover:bg-purple-700'}`}
+                  >
+                    <Icon name={isPaused ? "Play" : "Pause"} className="mr-2" size={20} />
+                    {isPaused ? 'Продолжить' : 'Пауза'}
+                  </Button>
+                  
+                  <Button 
+                    onClick={onStop}
+                    variant="destructive"
+                    className="flex-1"
+                  >
+                    <Icon name="Square" className="mr-2" size={20} />
+                    Стоп
+                  </Button>
+
+                  <Button 
+                    onClick={onStopCapture}
+                    variant="outline"
+                    className="flex-1"
+                  >
+                    <Icon name="X" className="mr-2" size={20} />
+                    Завершить
+                  </Button>
+                </div>
+              </>
             )}
             
             {!isRunning && (

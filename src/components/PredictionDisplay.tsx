@@ -29,69 +29,75 @@ export const PredictionDisplay = ({
           Ансамблевый прогноз
         </h2>
 
-        {ensemblePrediction ? (
-          <div className="space-y-4">
-            <div className={`relative p-8 rounded-xl border-4 ${
-              ensemblePrediction.column === 'alpha' 
-                ? 'bg-green-500/20 border-green-400' 
-                : 'bg-red-500/20 border-red-400'
+        <div className="space-y-4">
+          <div className="bg-gradient-to-r from-purple-900/50 to-blue-900/50 p-6 rounded-xl border-2 border-purple-500/50 shadow-lg">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-purple-500/30 p-3 rounded-full">
+                  <Icon name="Timer" className="text-purple-300" size={28} />
+                </div>
+                <span className="text-slate-200 font-bold text-lg">Таймер распознавания</span>
+              </div>
+              <div className={`text-5xl font-bold tabular-nums ${timeLeft <= 10 ? 'text-yellow-300 animate-pulse' : 'text-white'}`}>
+                {timeLeft}
+              </div>
+            </div>
+            <Progress value={(timeLeft / 30) * 100} className="h-3 mb-2" />
+            <div className="flex justify-between items-center text-slate-300 text-sm">
+              <span>Следующее распознавание через {timeLeft} сек</span>
+              <span className="text-purple-300 font-semibold">Цикл: 30 сек</span>
+            </div>
+          </div>
+
+          {currentSuccess && (
+            <div className={`p-4 rounded-lg border-2 animate-in fade-in duration-500 ${
+              currentSuccess === 'alpha' 
+                ? 'bg-green-500/30 border-green-400' 
+                : 'bg-red-500/30 border-red-400'
             }`}>
-              <div className="text-center">
-                <div className="text-6xl font-bold text-white mb-2">
-                  {ensemblePrediction.column === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
-                </div>
-                <div className="text-2xl text-white/80">
-                  Уверенность: {ensemblePrediction.confidence}%
-                </div>
-              </div>
-
-              {lastPredictionResult && (
-                <div className={`absolute top-2 right-2 ${
-                  lastPredictionResult === 'correct' ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  <Icon 
-                    name={lastPredictionResult === 'correct' ? "CheckCircle" : "XCircle"} 
-                    size={32} 
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="bg-slate-700/50 p-4 rounded-lg border-2 border-purple-500/30">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <Icon name="Clock" className="text-purple-400" size={20} />
-                  <span className="text-slate-300 font-semibold">До следующего анализа</span>
-                </div>
-                <div className={`text-3xl font-bold ${timeLeft <= 10 ? 'text-yellow-400 animate-pulse' : 'text-white'}`}>
-                  {timeLeft}с
-                </div>
-              </div>
-              <Progress value={(timeLeft / 30) * 100} className="h-4" />
-              <div className="text-center text-slate-400 text-xs mt-2">
-                Автоматическое распознавание каждые 30 секунд
+              <div className="flex items-center gap-2 text-white font-bold text-lg">
+                <Icon name="CheckCircle" size={28} />
+                Последнее распознавание: {currentSuccess === 'alpha' ? '🔵 АЛЬФА' : '🟣 ОМЕГА'}
               </div>
             </div>
+          )}
 
-            {currentSuccess && (
-              <div className={`p-4 rounded-lg ${
-                currentSuccess === 'alpha' 
-                  ? 'bg-green-500/30 border border-green-400' 
-                  : 'bg-red-500/30 border border-red-400'
+          {ensemblePrediction ? (
+            <>
+              <div className={`relative p-8 rounded-xl border-4 ${
+                ensemblePrediction.column === 'alpha' 
+                  ? 'bg-green-500/20 border-green-400' 
+                  : 'bg-red-500/20 border-red-400'
               }`}>
-                <div className="flex items-center gap-2 text-white font-bold">
-                  <Icon name="CheckCircle" size={24} />
-                  Распознано: {currentSuccess === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
+                <div className="text-center">
+                  <div className="text-6xl font-bold text-white mb-2">
+                    {ensemblePrediction.column === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
+                  </div>
+                  <div className="text-2xl text-white/80">
+                    Уверенность: {ensemblePrediction.confidence}%
+                  </div>
                 </div>
+
+                {lastPredictionResult && (
+                  <div className={`absolute top-2 right-2 ${
+                    lastPredictionResult === 'correct' ? 'text-green-400' : 'text-red-400'
+                  }`}>
+                    <Icon 
+                      name={lastPredictionResult === 'correct' ? "CheckCircle" : "XCircle"} 
+                      size={32} 
+                    />
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        ) : (
-          <div className="text-center text-slate-400 py-12">
-            <Icon name="Brain" className="mx-auto mb-4 text-slate-600" size={64} />
-            <p>Накопление данных для прогноза...</p>
-          </div>
-        )}
+            </>
+          ) : (
+            <div className="text-center text-slate-400 py-8 bg-slate-700/30 rounded-lg border border-slate-600">
+              <Icon name="Brain" className="mx-auto mb-3 text-slate-500" size={48} />
+              <p className="text-sm">Накопление данных для прогноза...</p>
+              <p className="text-xs text-slate-500 mt-1">Требуется минимум 1 распознавание</p>
+            </div>
+          )}
+        </div>
       </Card>
 
       <Card className="bg-slate-800/50 border-purple-500/30 p-6">

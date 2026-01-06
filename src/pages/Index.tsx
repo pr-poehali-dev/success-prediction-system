@@ -707,6 +707,7 @@ const Index = () => {
             captureArea={captureArea}
             lastRecognizedText={lastRecognizedText}
             captureLogs={captureLogs}
+            timeLeft={timeLeft}
             onStartCapture={startScreenCapture}
             onStopCapture={stopScreenCapture}
             onPauseResume={handlePauseResume}
