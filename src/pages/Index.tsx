@@ -256,56 +256,55 @@ const Index = () => {
     );
 
     const data = imageData.data;
-    let cyanPixels = 0;
-    let purplePixels = 0;
-    let totalPixels = 0;
+    let cyanScore = 0;
+    let purpleScore = 0;
+    let analyzedPixels = 0;
 
-    // Анализируем каждый пиксель на наличие голубого или фиолетового текста
+    // Анализируем каждый пиксель
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
       
-      // Пропускаем очень темные (фон) и очень светлые (белый фон) пиксели
-      const brightness = (r + g + b) / 3;
-      if (brightness < 50 || brightness > 240) continue;
+      // Пропускаем почти чёрные и почти белые пиксели (фон)
+      const brightness = r + g + b;
+      if (brightness < 100 || brightness > 650) continue;
       
-      totalPixels++;
+      analyzedPixels++;
       
-      // Голубой текст (Cyan): высокие G и B, низкий R
-      // Типичный голубой: RGB(0, 200-255, 200-255)
-      if (g > 150 && b > 150 && r < 100 && g > r + 50 && b > r + 50) {
-        cyanPixels++;
+      // Голубой (Cyan) - когда синий и зелёный намного выше красного
+      // Например: RGB(0, 255, 255) или RGB(100, 200, 255)
+      const cyanness = (g + b) / 2 - r;
+      if (cyanness > 80 && b > 120) {
+        cyanScore += cyanness;
       }
       
-      // Фиолетовый текст (Purple/Magenta): высокие R и B, низкий G
-      // Типичный фиолетовый: RGB(150-255, 0-100, 150-255)
-      if (r > 150 && b > 150 && g < 100 && r > g + 50 && b > g + 50) {
-        purplePixels++;
+      // Фиолетовый (Purple/Magenta) - когда красный и синий намного выше зелёного
+      // Например: RGB(255, 0, 255) или RGB(200, 100, 255)
+      const purpleness = (r + b) / 2 - g;
+      if (purpleness > 80 && b > 120) {
+        purpleScore += purpleness;
       }
     }
 
-    // Если недостаточно цветных пикселей для анализа
-    if (totalPixels < 10) {
-      setLastRecognizedText('Недостаточно данных для распознавания');
+    if (analyzedPixels < 50) {
+      setLastRecognizedText('Мало данных для анализа');
       return null;
     }
 
-    const cyanPercentage = (cyanPixels / totalPixels) * 100;
-    const purplePercentage = (purplePixels / totalPixels) * 100;
+    const cyanAvg = cyanScore / analyzedPixels;
+    const purpleAvg = purpleScore / analyzedPixels;
 
-    // Нужно хотя бы 5% пикселей нужного цвета
-    if (cyanPixels > purplePixels && cyanPercentage > 5) {
-      setLastRecognizedText(`Обнаружен голубой текст (${cyanPercentage.toFixed(1)}%) → АЛЬФА`);
+    setLastRecognizedText(`Голубой: ${cyanAvg.toFixed(1)}, Фиолетовый: ${purpleAvg.toFixed(1)}, Пикселей: ${analyzedPixels}`);
+
+    if (cyanAvg > 30 && cyanAvg > purpleAvg) {
       return 'alpha';
     }
 
-    if (purplePixels > cyanPixels && purplePercentage > 5) {
-      setLastRecognizedText(`Обнаружен фиолетовый текст (${purplePercentage.toFixed(1)}%) → ОМЕГА`);
+    if (purpleAvg > 30 && purpleAvg > cyanAvg) {
       return 'omega';
     }
 
-    setLastRecognizedText(`Голубой: ${cyanPercentage.toFixed(1)}%, Фиолетовый: ${purplePercentage.toFixed(1)}%`);
     return null;
   };
 
