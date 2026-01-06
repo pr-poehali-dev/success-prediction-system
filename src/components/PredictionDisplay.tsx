@@ -57,12 +57,20 @@ export const PredictionDisplay = ({
               )}
             </div>
 
-            <div className="bg-slate-700/50 p-4 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-slate-300">До следующего анализа</span>
-                <span className="text-2xl font-bold text-white">{timeLeft}с</span>
+            <div className="bg-slate-700/50 p-4 rounded-lg border-2 border-purple-500/30">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Icon name="Clock" className="text-purple-400" size={20} />
+                  <span className="text-slate-300 font-semibold">До следующего анализа</span>
+                </div>
+                <div className={`text-3xl font-bold ${timeLeft <= 10 ? 'text-yellow-400 animate-pulse' : 'text-white'}`}>
+                  {timeLeft}с
+                </div>
               </div>
-              <Progress value={(timeLeft / 30) * 100} className="h-3" />
+              <Progress value={(timeLeft / 30) * 100} className="h-4" />
+              <div className="text-center text-slate-400 text-xs mt-2">
+                Автоматическое распознавание каждые 30 секунд
+              </div>
             </div>
 
             {currentSuccess && (

@@ -384,7 +384,7 @@ const Index = () => {
     });
   };
 
-  const handleStart = () => {
+  const handleStart = async () => {
     if (!captureArea) {
       toast({
         title: "Выберите область",
@@ -396,11 +396,38 @@ const Index = () => {
 
     setIsRunning(true);
     setIsPaused(false);
+    setTimeLeft(30);
     
     toast({
       title: "Система запущена",
       description: "Начато распознавание и прогнозирование",
     });
+
+    // Первое распознавание сразу
+    const detectedColumn = await recognizeColorFromArea();
+    if (detectedColumn) {
+      const newEvent: HistoryEvent = {
+        id: Date.now(),
+        column: detectedColumn,
+        timestamp: new Date(),
+        source: 'screen'
+      };
+      
+      setHistory(prev => [...prev, newEvent]);
+      setRecognizedHistory(prev => [...prev, detectedColumn]);
+      setCurrentSuccess(detectedColumn);
+      
+      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGWS56+OZRQ0PVKjk7ahiHAU7k9rxzH0vBSl+zPDef0IKFmG47OWkUhEMTKXh8bllHgU');
+      audio.volume = 0.3;
+      audio.play().catch(() => {});
+      
+      setTimeout(() => setCurrentSuccess(null), 2000);
+      
+      toast({
+        title: `Распознано!`,
+        description: `Обнаружена колонка: ${detectedColumn === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}`,
+      });
+    }
   };
 
   const handleStop = () => {
