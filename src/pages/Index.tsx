@@ -138,11 +138,19 @@ const Index = () => {
   }, [recognizedHistory, methodHistory]);
 
   useEffect(() => {
-    if (timeLeft > 0 && isRunning && !isPaused) {
-      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [timeLeft, isRunning, isPaused]);
+    if (!isRunning || isPaused) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          return 30;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isRunning, isPaused]);
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -256,9 +264,9 @@ const Index = () => {
     );
 
     const data = imageData.data;
-    let cyanPixels = 0;
-    let purplePixels = 0;
-    let totalPixels = 0;
+    let cyanScore = 0;
+    let purpleScore = 0;
+    let pixelCount = 0;
 
     // Анализируем каждый пиксель
     for (let i = 0; i < data.length; i += 4) {
@@ -266,41 +274,41 @@ const Index = () => {
       const g = data[i + 1];
       const b = data[i + 2];
       
-      // Пропускаем почти чёрные и почти белые пиксели (фон)
+      // Пропускаем тёмные и очень светлые пиксели
       const brightness = r + g + b;
-      if (brightness < 80 || brightness > 700) continue;
+      if (brightness < 100 || brightness > 650) continue;
       
-      totalPixels++;
+      pixelCount++;
       
-      // Голубой (Cyan/Blue) - когда синий и зелёный выше красного
-      // RGB примеры: (0,255,255), (100,200,255), (50,150,200)
-      if (b > r + 30 && g > r + 20) {
-        cyanPixels++;
+      // Голубой текст: синий + зелёный компоненты сильнее красного
+      const cyanness = (g + b) / 2 - r;
+      if (cyanness > 30 && b > 80) {
+        cyanScore += cyanness;
       }
       
-      // Фиолетовый (Purple/Magenta) - когда красный и синий выше зелёного
-      // RGB примеры: (255,0,255), (200,100,255), (180,80,200)
-      if (r > g + 30 && b > g + 30) {
-        purplePixels++;
+      // Фиолетовый текст: красный + синий компоненты сильнее зелёного
+      const purpleness = (r + b) / 2 - g;
+      if (purpleness > 30 && b > 80) {
+        purpleScore += purpleness;
       }
     }
 
-    if (totalPixels < 100) {
+    if (pixelCount < 50) {
       setLastRecognizedText('Мало пикселей для анализа');
       return null;
     }
 
-    const cyanPercent = (cyanPixels / totalPixels) * 100;
-    const purplePercent = (purplePixels / totalPixels) * 100;
+    const avgCyan = cyanScore / pixelCount;
+    const avgPurple = purpleScore / pixelCount;
 
-    setLastRecognizedText(`🔵 Голубой: ${cyanPercent.toFixed(1)}% (${cyanPixels} пикс.) | 🟣 Фиолетовый: ${purplePercent.toFixed(1)}% (${purplePixels} пикс.) | Всего: ${totalPixels}`);
+    setLastRecognizedText(`🔵 Голубой: ${avgCyan.toFixed(1)} | 🟣 Фиолетовый: ${avgPurple.toFixed(1)} | Пикселей: ${pixelCount}`);
 
-    // Победитель - у кого больше процент пикселей (минимум 5%)
-    if (cyanPercent > 5 && cyanPercent > purplePercent) {
+    // Определяем победителя (минимум 15 очков)
+    if (avgCyan > 15 && avgCyan > avgPurple * 1.2) {
       return 'alpha';
     }
 
-    if (purplePercent > 5 && purplePercent > cyanPercent) {
+    if (avgPurple > 15 && avgPurple > avgCyan * 1.2) {
       return 'omega';
     }
 
