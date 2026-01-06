@@ -129,8 +129,13 @@ export const ScreenCapture = ({
               <div className="flex items-start gap-2">
                 <Icon name="AlertTriangle" className="text-yellow-400 flex-shrink-0 mt-1" size={20} />
                 <div className="text-sm text-yellow-200">
-                  <p className="font-semibold mb-1">Для Яндекс.Браузера:</p>
-                  <p>Если окно выбора не появляется - откройте сайт в <strong>Chrome</strong> или <strong>Edge</strong>. Яндекс.Браузер может блокировать захват экрана.</p>
+                  <p className="font-semibold mb-2">Яндекс.Браузер блокирует захват экрана</p>
+                  <p className="mb-2">🔧 <strong>Решение проблемы:</strong></p>
+                  <ol className="list-decimal ml-5 space-y-1">
+                    <li>Откройте сайт в <strong>Google Chrome</strong> (скачать: chrome.google.com)</li>
+                    <li>Или используйте <strong>Edge</strong> (встроен в Windows)</li>
+                    <li>Или напишите в поддержку: <strong>t.me/+QgiLIa1gFRY4Y2Iy</strong></li>
+                  </ol>
                 </div>
               </div>
             </div>
@@ -142,6 +147,10 @@ export const ScreenCapture = ({
               <Icon name="ScreenShare" className="mr-2" size={20} />
               Начать захват экрана
             </Button>
+            
+            <div className="text-center text-slate-400 text-sm">
+              <p>💬 Помощь: <a href="https://t.me/+QgiLIa1gFRY4Y2Iy" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline">Telegram-сообщество</a></p>
+            </div>
           </>
         ) : (
           <>
