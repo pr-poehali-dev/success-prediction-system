@@ -264,51 +264,67 @@ const Index = () => {
     );
 
     const data = imageData.data;
-    let cyanScore = 0;
-    let purpleScore = 0;
-    let pixelCount = 0;
+    let cyanPixels = 0;
+    let purplePixels = 0;
+    let cyanIntensity = 0;
+    let purpleIntensity = 0;
+    let totalAnalyzed = 0;
 
-    // Анализируем каждый пиксель
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
       
-      // Пропускаем тёмные и очень светлые пиксели
       const brightness = r + g + b;
-      if (brightness < 100 || brightness > 650) continue;
+      if (brightness < 60 || brightness > 700) continue;
       
-      pixelCount++;
+      totalAnalyzed++;
       
-      // Голубой текст: синий + зелёный компоненты сильнее красного
-      const cyanness = (g + b) / 2 - r;
-      if (cyanness > 30 && b > 80) {
-        cyanScore += cyanness;
+      const isCyan = b > 100 && g > 80 && b > r * 1.3 && g > r * 0.8;
+      const isCyanBlue = b > 120 && g > 60 && b > r + 40 && g > r + 20;
+      
+      const isPurple = r > 80 && b > 80 && r > g * 1.2 && b > g * 1.2;
+      const isMagenta = r > 100 && b > 100 && Math.abs(r - b) < 60 && r > g + 30 && b > g + 30;
+      
+      if (isCyan || isCyanBlue) {
+        cyanPixels++;
+        cyanIntensity += (b + g - r * 2);
       }
       
-      // Фиолетовый текст: красный + синий компоненты сильнее зелёного
-      const purpleness = (r + b) / 2 - g;
-      if (purpleness > 30 && b > 80) {
-        purpleScore += purpleness;
+      if (isPurple || isMagenta) {
+        purplePixels++;
+        purpleIntensity += (r + b - g * 2);
       }
     }
 
-    if (pixelCount < 50) {
-      setLastRecognizedText('Мало пикселей для анализа');
+    if (totalAnalyzed < 30) {
+      setLastRecognizedText('❌ Недостаточно пикселей для анализа');
       return null;
     }
 
-    const avgCyan = cyanScore / pixelCount;
-    const avgPurple = purpleScore / pixelCount;
+    const cyanPercent = (cyanPixels / totalAnalyzed) * 100;
+    const purplePercent = (purplePixels / totalAnalyzed) * 100;
+    const avgCyanIntensity = cyanPixels > 0 ? cyanIntensity / cyanPixels : 0;
+    const avgPurpleIntensity = purplePixels > 0 ? purpleIntensity / purplePixels : 0;
 
-    setLastRecognizedText(`🔵 Голубой: ${avgCyan.toFixed(1)} | 🟣 Фиолетовый: ${avgPurple.toFixed(1)} | Пикселей: ${pixelCount}`);
+    setLastRecognizedText(
+      `🔵 Голубой: ${cyanPercent.toFixed(1)}% (${cyanPixels} пикс, яркость ${avgCyanIntensity.toFixed(0)}) | ` +
+      `🟣 Фиолетовый: ${purplePercent.toFixed(1)}% (${purplePixels} пикс, яркость ${avgPurpleIntensity.toFixed(0)})`
+    );
 
-    // Определяем победителя (минимум 15 очков)
-    if (avgCyan > 15 && avgCyan > avgPurple * 1.2) {
+    if (cyanPercent > 3 && cyanPixels > purplePixels && avgCyanIntensity > avgPurpleIntensity) {
       return 'alpha';
     }
 
-    if (avgPurple > 15 && avgPurple > avgCyan * 1.2) {
+    if (purplePercent > 3 && purplePixels > cyanPixels && avgPurpleIntensity > avgCyanIntensity) {
+      return 'omega';
+    }
+
+    if (cyanPixels > purplePixels * 1.5 && cyanPercent > 2) {
+      return 'alpha';
+    }
+
+    if (purplePixels > cyanPixels * 1.5 && purplePercent > 2) {
       return 'omega';
     }
 
