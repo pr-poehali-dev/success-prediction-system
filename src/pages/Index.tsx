@@ -389,16 +389,6 @@ const Index = () => {
     return null;
   };
 
-
-
-  useEffect(() => {
-    if (timeLeft === 10 && isRunning && !isPaused) {
-      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGWS56+OZRQ0PVKjk7ahiHAU7k9rxzH0vBSl+zPDef0IKFmG47OWkUhEMTKXh8bllHgU');
-      audio.volume = 0.5;
-      audio.play().catch(() => {});
-    }
-  }, [timeLeft, isRunning, isPaused]);
-
   const addManualEntry = (column: Column) => {
     const newEvent: HistoryEvent = {
       id: Date.now(),
