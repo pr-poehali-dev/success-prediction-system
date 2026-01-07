@@ -348,25 +348,23 @@ const Index = () => {
       const b = data[i + 2];
       
       const brightness = r + g + b;
-      if (brightness < 100 || brightness > 650) continue;
-      
-      if (b < 70) continue;
+      if (brightness < 80 || brightness > 700) continue;
       
       analyzedPixels++;
       
       const cyanSignal = (b + g) / 2 - r;
       const purpleSignal = (r + b) / 2 - g;
       
-      if (cyanSignal > 20) {
+      if (cyanSignal > 10) {
         cyanScore += cyanSignal;
       }
       
-      if (purpleSignal > 20) {
+      if (purpleSignal > 10) {
         purpleScore += purpleSignal;
       }
     }
 
-    if (analyzedPixels < 100) {
+    if (analyzedPixels < 50) {
       setLastRecognizedText('❌ Недостаточно пикселей для анализа');
       return null;
     }
@@ -378,11 +376,11 @@ const Index = () => {
       `🔵 Голубой: ${avgCyan.toFixed(1)} | 🟣 Фиолетовый: ${avgPurple.toFixed(1)} | Пикс: ${analyzedPixels}`
     );
 
-    if (avgCyan > avgPurple * 1.3 && avgCyan > 15) {
+    if (avgCyan > avgPurple * 1.15 && avgCyan > 8) {
       return 'alpha';
     }
 
-    if (avgPurple > avgCyan * 1.3 && avgPurple > 15) {
+    if (avgPurple > avgCyan * 1.15 && avgPurple > 8) {
       return 'omega';
     }
 
