@@ -152,6 +152,24 @@ const Index = () => {
     return () => clearInterval(timer);
   }, [isRunning, isPaused]);
 
+  useEffect(() => {
+    if (!isRunning || isPaused || !isCapturing || !captureArea) return;
+
+    const recognitionTimer = setInterval(async () => {
+      addLog('🔍 Запуск распознавания цвета...');
+      const recognized = await recognizeColorFromArea();
+      
+      if (recognized) {
+        addLog(`✅ Распознан цвет: ${recognized === 'alpha' ? '🔵 Альфа (голубой)' : '🟣 Омега (фиолетовый)'}`);
+        handleColumnClick(recognized);
+      } else {
+        addLog('⚠️ Цвет не распознан или недостаточно данных');
+      }
+    }, 30000);
+
+    return () => clearInterval(recognitionTimer);
+  }, [isRunning, isPaused, isCapturing, captureArea]);
+
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
     setCaptureLogs(prev => [...prev, `[${timestamp}] ${message}`]);
