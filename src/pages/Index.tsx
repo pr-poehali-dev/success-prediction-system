@@ -33,7 +33,7 @@ const Index = () => {
   const [history, setHistory] = useState<HistoryEvent[]>([]);
   const [recognizedHistory, setRecognizedHistory] = useState<Column[]>([]);
   const [currentSuccess, setCurrentSuccess] = useState<Column | null>(null);
-  const [timeLeft, setTimeLeft] = useState(30);
+
   const [predictions, setPredictions] = useState<AlgorithmPrediction[]>([]);
   const [ensemblePrediction, setEnsemblePrediction] = useState<{ column: Column; confidence: number } | null>(null);
   const [previousPrediction, setPreviousPrediction] = useState<Column | null>(null);
@@ -139,20 +139,7 @@ const Index = () => {
     }
   }, [recognizedHistory, methodHistory]);
 
-  useEffect(() => {
-    if (!isRunning || isPaused) return;
 
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          return 30;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [isRunning, isPaused]);
 
   useEffect(() => {
     if (!isRunning || isPaused || !isCapturing || !captureArea) {
@@ -168,12 +155,7 @@ const Index = () => {
       const recognized = await recognizeColorFromArea();
       
       if (recognized) {
-        if (lastRecognizedColor === recognized) {
-          addLog(`⚠️ Тот же цвет (${recognized === 'alpha' ? 'альфа' : 'омега'}), пропускаем`);
-          return;
-        }
-        
-        addLog(`✅ Распознан НОВЫЙ цвет: ${recognized === 'alpha' ? '🔵 Альфа' : '🟣 Омега'}`);
+        addLog(`✅ Распознан цвет: ${recognized === 'alpha' ? '🔵 Альфа' : '🟣 Омега'}`);
         setLastRecognizedColor(recognized);
         
         if (previousPrediction && ensemblePrediction) {
@@ -221,7 +203,6 @@ const Index = () => {
         audio.play().catch(() => {});
         
         setTimeout(() => setCurrentSuccess(null), 2000);
-        setTimeLeft(30);
 
         toast({
           title: `Распознано!`,
@@ -445,7 +426,6 @@ const Index = () => {
 
     setIsRunning(true);
     setIsPaused(false);
-    setTimeLeft(30);
     setLastRecognizedColor(null);
     
     toast({
@@ -565,7 +545,7 @@ const Index = () => {
     setHistory([]);
     setRecognizedHistory([]);
     setCurrentSuccess(null);
-    setTimeLeft(30);
+
     setPredictions([]);
     setEnsemblePrediction(null);
     setPreviousPrediction(null);
@@ -718,7 +698,6 @@ const Index = () => {
             captureArea={captureArea}
             lastRecognizedText={lastRecognizedText}
             captureLogs={captureLogs}
-            timeLeft={timeLeft}
             onStartCapture={startScreenCapture}
             onStopCapture={stopScreenCapture}
             onPauseResume={handlePauseResume}
@@ -732,7 +711,6 @@ const Index = () => {
           <PredictionDisplay
             ensemblePrediction={ensemblePrediction}
             lastPredictionResult={lastPredictionResult}
-            timeLeft={timeLeft}
             currentSuccess={currentSuccess}
             predictions={predictions}
             methodStats={getMethodStats()}

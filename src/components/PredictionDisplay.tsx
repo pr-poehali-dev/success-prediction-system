@@ -7,7 +7,6 @@ import { Column, AlgorithmPrediction, MethodStats } from '@/types/prediction';
 interface PredictionDisplayProps {
   ensemblePrediction: { column: Column; confidence: number } | null;
   lastPredictionResult: 'correct' | 'incorrect' | null;
-  timeLeft: number;
   currentSuccess: Column | null;
   predictions: AlgorithmPrediction[];
   methodStats: MethodStats[];
@@ -16,7 +15,6 @@ interface PredictionDisplayProps {
 export const PredictionDisplay = ({
   ensemblePrediction,
   lastPredictionResult,
-  timeLeft,
   currentSuccess,
   predictions,
   methodStats
@@ -30,24 +28,6 @@ export const PredictionDisplay = ({
         </h2>
 
         <div className="space-y-4">
-          <div className="bg-gradient-to-r from-purple-900/50 to-blue-900/50 p-6 rounded-xl border-2 border-purple-500/50 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-purple-500/30 p-3 rounded-full">
-                  <Icon name="Timer" className="text-purple-300" size={28} />
-                </div>
-                <span className="text-slate-200 font-bold text-lg">Таймер распознавания</span>
-              </div>
-              <div className={`text-5xl font-bold tabular-nums ${timeLeft <= 10 ? 'text-yellow-300 animate-pulse' : 'text-white'}`}>
-                {timeLeft}
-              </div>
-            </div>
-            <Progress value={(timeLeft / 30) * 100} className="h-3 mb-2" />
-            <div className="flex justify-between items-center text-slate-300 text-sm">
-              <span>Следующее распознавание через {timeLeft} сек</span>
-              <span className="text-purple-300 font-semibold">Цикл: 30 сек</span>
-            </div>
-          </div>
 
           {currentSuccess && (
             <div className={`p-4 rounded-lg border-2 animate-in fade-in duration-500 ${
