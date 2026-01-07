@@ -1,3 +1,4 @@
+// Adaptive Prediction System v2.0 - Build 20260107
 import { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
