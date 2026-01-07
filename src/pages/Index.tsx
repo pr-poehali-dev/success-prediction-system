@@ -48,6 +48,8 @@ const Index = () => {
   const [captureArea, setCaptureArea] = useState<CaptureArea | null>(null);
   const [lastRecognizedText, setLastRecognizedText] = useState<string>('');
   const [captureLogs, setCaptureLogs] = useState<string[]>([]);
+  const [lastRecognizedColor, setLastRecognizedColor] = useState<Column | null>(null);
+  const recognitionTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [adaptiveWeights, setAdaptiveWeights] = useState<AdaptiveWeights>({
     pattern: 1.0,
     frequency: 1.0,
@@ -153,22 +155,94 @@ const Index = () => {
   }, [isRunning, isPaused]);
 
   useEffect(() => {
-    if (!isRunning || isPaused || !isCapturing || !captureArea) return;
+    if (!isRunning || isPaused || !isCapturing || !captureArea) {
+      if (recognitionTimerRef.current) {
+        clearInterval(recognitionTimerRef.current);
+        recognitionTimerRef.current = null;
+      }
+      return;
+    }
 
-    const recognitionTimer = setInterval(async () => {
+    const performRecognition = async () => {
       addLog('🔍 Запуск распознавания цвета...');
       const recognized = await recognizeColorFromArea();
       
       if (recognized) {
-        addLog(`✅ Распознан цвет: ${recognized === 'alpha' ? '🔵 Альфа (голубой)' : '🟣 Омега (фиолетовый)'}`);
-        handleColumnClick(recognized);
+        if (lastRecognizedColor === recognized) {
+          addLog(`⚠️ Тот же цвет (${recognized === 'alpha' ? 'альфа' : 'омега'}), пропускаем`);
+          return;
+        }
+        
+        addLog(`✅ Распознан НОВЫЙ цвет: ${recognized === 'alpha' ? '🔵 Альфа' : '🟣 Омега'}`);
+        setLastRecognizedColor(recognized);
+        
+        if (previousPrediction && ensemblePrediction) {
+          const isCorrect = previousPrediction === recognized;
+          setLastPredictionResult(isCorrect ? 'correct' : 'incorrect');
+          setTimeout(() => setLastPredictionResult(null), 5000);
+          
+          const predictionRecord: PredictionHistory = {
+            id: Date.now(),
+            timestamp: new Date(),
+            prediction: previousPrediction,
+            actual: recognized,
+            isCorrect,
+            confidence: ensemblePrediction.confidence
+          };
+          setPredictionHistory(prev => [...prev, predictionRecord]);
+          
+          predictions.forEach(pred => {
+            const methodRecord: MethodPredictionHistory = {
+              id: Date.now() + Math.random(),
+              timestamp: new Date(),
+              methodName: pred.name,
+              prediction: pred.prediction,
+              actual: recognized,
+              isCorrect: pred.prediction === recognized,
+              confidence: pred.confidence
+            };
+            setMethodHistory(prev => [...prev, methodRecord]);
+          });
+        }
+
+        const newEvent: HistoryEvent = {
+          id: Date.now(),
+          column: recognized,
+          timestamp: new Date(),
+          source: 'screen'
+        };
+        
+        setHistory(prev => [...prev, newEvent]);
+        setRecognizedHistory(prev => [...prev, recognized]);
+        setCurrentSuccess(recognized);
+        
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGWS56+OZRQ0PVKjk7ahiHAU7k9rxzH0vBSl+zPDef0IKFmG47OWkUhEMTKXh8bllHgU');
+        audio.volume = 0.3;
+        audio.play().catch(() => {});
+        
+        setTimeout(() => setCurrentSuccess(null), 2000);
+        setTimeLeft(30);
+
+        toast({
+          title: `Распознано!`,
+          description: `Обнаружена колонка: ${recognized === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}`,
+        });
       } else {
         addLog('⚠️ Цвет не распознан или недостаточно данных');
       }
-    }, 30000);
+    };
 
-    return () => clearInterval(recognitionTimer);
-  }, [isRunning, isPaused, isCapturing, captureArea]);
+    performRecognition();
+
+    recognitionTimerRef.current = setInterval(performRecognition, 30000);
+
+    return () => {
+      if (recognitionTimerRef.current) {
+        clearInterval(recognitionTimerRef.current);
+        recognitionTimerRef.current = null;
+      }
+    };
+  }, [isRunning, isPaused, isCapturing, captureArea, previousPrediction, ensemblePrediction, predictions, lastRecognizedColor]);
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
@@ -333,69 +407,7 @@ const Index = () => {
     return null;
   };
 
-  useEffect(() => {
-    if (!isCapturing || !isRunning || isPaused) return;
 
-    const interval = setInterval(async () => {
-      const detectedColumn = await recognizeColorFromArea();
-      
-      if (detectedColumn) {
-        if (previousPrediction && ensemblePrediction) {
-          const isCorrect = previousPrediction === detectedColumn;
-          setLastPredictionResult(isCorrect ? 'correct' : 'incorrect');
-          setTimeout(() => setLastPredictionResult(null), 5000);
-          
-          const predictionRecord: PredictionHistory = {
-            id: Date.now(),
-            timestamp: new Date(),
-            prediction: previousPrediction,
-            actual: detectedColumn,
-            isCorrect,
-            confidence: ensemblePrediction.confidence
-          };
-          setPredictionHistory(prev => [...prev, predictionRecord]);
-          
-          predictions.forEach(pred => {
-            const methodRecord: MethodPredictionHistory = {
-              id: Date.now() + Math.random(),
-              timestamp: new Date(),
-              methodName: pred.name,
-              prediction: pred.prediction,
-              actual: detectedColumn,
-              isCorrect: pred.prediction === detectedColumn,
-              confidence: pred.confidence
-            };
-            setMethodHistory(prev => [...prev, methodRecord]);
-          });
-        }
-
-        const newEvent: HistoryEvent = {
-          id: Date.now(),
-          column: detectedColumn,
-          timestamp: new Date(),
-          source: 'screen'
-        };
-        
-        setHistory(prev => [...prev, newEvent]);
-        setRecognizedHistory(prev => [...prev, detectedColumn]);
-        setCurrentSuccess(detectedColumn);
-        
-        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGWS56+OZRQ0PVKjk7ahiHAU7k9rxzH0vBSl+zPDef0IKFmG47OWkUhEMTKXh8bllHgU');
-        audio.volume = 0.3;
-        audio.play().catch(() => {});
-        
-        setTimeout(() => setCurrentSuccess(null), 2000);
-        setTimeLeft(30);
-
-        toast({
-          title: `Распознано!`,
-          description: `Обнаружена колонка: ${detectedColumn === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}`,
-        });
-      }
-    }, 30000);
-
-    return () => clearInterval(interval);
-  }, [isCapturing, isRunning, isPaused, captureArea, previousPrediction]);
 
   useEffect(() => {
     if (timeLeft === 10 && isRunning && !isPaused) {
@@ -434,37 +446,12 @@ const Index = () => {
     setIsRunning(true);
     setIsPaused(false);
     setTimeLeft(30);
+    setLastRecognizedColor(null);
     
     toast({
       title: "Система запущена",
       description: "Начато распознавание и прогнозирование",
     });
-
-    // Первое распознавание сразу
-    const detectedColumn = await recognizeColorFromArea();
-    if (detectedColumn) {
-      const newEvent: HistoryEvent = {
-        id: Date.now(),
-        column: detectedColumn,
-        timestamp: new Date(),
-        source: 'screen'
-      };
-      
-      setHistory(prev => [...prev, newEvent]);
-      setRecognizedHistory(prev => [...prev, detectedColumn]);
-      setCurrentSuccess(detectedColumn);
-      
-      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGWS56+OZRQ0PVKjk7ahiHAU7k9rxzH0vBSl+zPDef0IKFmG47OWkUhEMTKXh8bllHgU');
-      audio.volume = 0.3;
-      audio.play().catch(() => {});
-      
-      setTimeout(() => setCurrentSuccess(null), 2000);
-      
-      toast({
-        title: `Распознано!`,
-        description: `Обнаружена колонка: ${detectedColumn === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}`,
-      });
-    }
   };
 
   const handleStop = () => {
@@ -589,6 +576,7 @@ const Index = () => {
     setIsPaused(false);
     setIsRunning(false);
     setLastRecognizedText('');
+    setLastRecognizedColor(null);
     setAdaptiveWeights({
       pattern: 1.0,
       frequency: 1.0,
@@ -598,6 +586,11 @@ const Index = () => {
       entropy: 1.0,
       streak: 1.0
     });
+    
+    if (recognitionTimerRef.current) {
+      clearInterval(recognitionTimerRef.current);
+      recognitionTimerRef.current = null;
+    }
     
     toast({
       title: "Система сброшена",
