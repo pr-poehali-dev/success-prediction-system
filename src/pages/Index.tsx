@@ -282,62 +282,40 @@ const Index = () => {
     );
 
     const data = imageData.data;
-    let cyanScore = 0;
-    let purpleScore = 0;
-    let totalAnalyzed = 0;
+    let totalBrightness = 0;
+    let coloredPixels = 0;
 
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
       
-      const brightness = r + g + b;
-      if (brightness < 60 || brightness > 700) continue;
+      const brightness = (r + g + b) / 3;
       
-      totalAnalyzed++;
+      if (brightness < 40 || brightness > 240) continue;
       
-      const greenBlueAvg = (g + b) / 2;
-      const redBlueAvg = (r + b) / 2;
-      
-      const cyanSignature = greenBlueAvg - r;
-      const purpleSignature = redBlueAvg - g;
-      
-      if (b > 100) {
-        if (g > r + 20 && cyanSignature > 40) {
-          cyanScore += cyanSignature;
-        }
-        
-        if (r > g + 20 && purpleSignature > 40) {
-          purpleScore += purpleSignature;
-        }
+      if (b > 60 && (b > r || b > g)) {
+        coloredPixels++;
+        totalBrightness += brightness;
       }
     }
 
-    if (totalAnalyzed < 30) {
-      setLastRecognizedText('❌ Недостаточно пикселей для анализа');
+    if (coloredPixels < 50) {
+      setLastRecognizedText('❌ Недостаточно цветных пикселей для анализа');
       return null;
     }
 
-    const avgCyan = cyanScore / totalAnalyzed;
-    const avgPurple = purpleScore / totalAnalyzed;
+    const avgBrightness = totalBrightness / coloredPixels;
 
     setLastRecognizedText(
-      `🔵 Голубой: ${avgCyan.toFixed(1)} очков | 🟣 Фиолетовый: ${avgPurple.toFixed(1)} очков | Всего: ${totalAnalyzed} пикс`
+      `💡 Средняя яркость: ${avgBrightness.toFixed(1)} | Пикселей: ${coloredPixels}`
     );
 
-    if (avgCyan > 10 && avgCyan > avgPurple * 1.3) {
+    if (avgBrightness > 140) {
       return 'alpha';
     }
 
-    if (avgPurple > 10 && avgPurple > avgCyan * 1.3) {
-      return 'omega';
-    }
-
-    if (avgCyan > 5 && avgCyan > avgPurple) {
-      return 'alpha';
-    }
-
-    if (avgPurple > 5 && avgPurple > avgCyan) {
+    if (avgBrightness < 120) {
       return 'omega';
     }
 
