@@ -224,7 +224,7 @@ const Index = () => {
         recognitionTimerRef.current = null;
       }
     };
-  }, [isRunning, isPaused, isCapturing, captureArea, previousPrediction, ensemblePrediction, predictions, lastRecognizedColor]);
+  }, [isRunning, isPaused, isCapturing, captureArea]);
 
   const addLog = (message: string) => {
     const timestamp = new Date().toLocaleTimeString();
