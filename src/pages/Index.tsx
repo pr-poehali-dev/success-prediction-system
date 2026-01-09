@@ -341,28 +341,24 @@ const Index = () => {
     );
 
     const data = imageData.data;
-    let totalBrightness = 0;
+    let totalDistance = 0;
     let analyzedPixels = 0;
-    let lightPixels = 0;
-    let darkPixels = 0;
 
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
       
-      const brightness = (r + g + b) / 3;
+      const distanceToWhite = Math.sqrt(
+        Math.pow(255 - r, 2) + 
+        Math.pow(255 - g, 2) + 
+        Math.pow(255 - b, 2)
+      );
       
-      if (brightness < 20) continue;
+      if (distanceToWhite > 400) continue;
       
-      totalBrightness += brightness;
+      totalDistance += distanceToWhite;
       analyzedPixels++;
-      
-      if (brightness > 140) {
-        lightPixels++;
-      } else if (brightness < 100) {
-        darkPixels++;
-      }
     }
 
     if (analyzedPixels < 5) {
@@ -370,15 +366,13 @@ const Index = () => {
       return null;
     }
 
-    const avgBrightness = totalBrightness / analyzedPixels;
-    const lightRatio = (lightPixels / analyzedPixels) * 100;
-    const darkRatio = (darkPixels / analyzedPixels) * 100;
+    const avgDistance = totalDistance / analyzedPixels;
 
     setLastRecognizedText(
-      `💡 Яркость: ${avgBrightness.toFixed(1)} | Светлых: ${lightRatio.toFixed(0)}% | Темных: ${darkRatio.toFixed(0)}%`
+      `📏 Расстояние до белого: ${avgDistance.toFixed(1)} | Пикселей: ${analyzedPixels}`
     );
 
-    if (avgBrightness >= 115 || lightRatio > 30) {
+    if (avgDistance < 200) {
       return 'alpha';
     } else {
       return 'omega';
