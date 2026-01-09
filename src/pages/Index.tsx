@@ -341,8 +341,7 @@ const Index = () => {
     );
 
     const data = imageData.data;
-    let cyanScore = 0;
-    let purpleScore = 0;
+    let totalBrightness = 0;
     let analyzedPixels = 0;
 
     for (let i = 0; i < data.length; i += 4) {
@@ -350,40 +349,28 @@ const Index = () => {
       const g = data[i + 1];
       const b = data[i + 2];
       
-      const brightness = r + g + b;
-      if (brightness < 60 || brightness > 720) continue;
+      const brightness = (r + g + b) / 3;
       
+      if (brightness < 30 || brightness > 240) continue;
+      
+      totalBrightness += brightness;
       analyzedPixels++;
-      
-      const cyanSignal = (b + g) / 2 - r;
-      const purpleSignal = (r + b) / 2 - g;
-      
-      if (cyanSignal > 5) {
-        cyanScore += cyanSignal;
-      }
-      
-      if (purpleSignal > 5) {
-        purpleScore += purpleSignal;
-      }
     }
 
-    if (analyzedPixels < 30) {
+    if (analyzedPixels < 10) {
       setLastRecognizedText('❌ Недостаточно пикселей для анализа');
       return null;
     }
 
-    const avgCyan = cyanScore / analyzedPixels;
-    const avgPurple = purpleScore / analyzedPixels;
+    const avgBrightness = totalBrightness / analyzedPixels;
 
     setLastRecognizedText(
-      `🔵 Голубой: ${avgCyan.toFixed(1)} | 🟣 Фиолетовый: ${avgPurple.toFixed(1)} | Пикс: ${analyzedPixels}`
+      `💡 Яркость: ${avgBrightness.toFixed(1)} | Пикселей: ${analyzedPixels}`
     );
 
-    if (avgCyan > avgPurple && avgCyan > 5) {
+    if (avgBrightness > 130) {
       return 'alpha';
-    }
-
-    if (avgPurple > avgCyan && avgPurple > 5) {
+    } else if (avgBrightness < 130) {
       return 'omega';
     }
 
