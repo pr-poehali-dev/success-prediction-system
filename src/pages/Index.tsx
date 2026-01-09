@@ -400,11 +400,24 @@ const Index = () => {
 
     let lastExecutionTime = Date.now();
     let intervalId: number;
+    let isExecuting = false;
 
     const performRecognition = async () => {
+      // Защита от задвоения
+      if (isExecuting) return;
+      isExecuting = true;
+
       const detectedColumn = await recognizeColorFromArea();
       
       if (detectedColumn) {
+        // Проверяем, не было ли только что такого же события
+        const now = Date.now();
+        const timeSinceLastRecognition = now - lastExecutionTime;
+        if (timeSinceLastRecognition < 5000) {
+          isExecuting = false;
+          return;
+        }
+
         if (previousPrediction && ensemblePrediction) {
           const isCorrect = previousPrediction === detectedColumn;
           setLastPredictionResult(isCorrect ? 'correct' : 'incorrect');
@@ -456,9 +469,11 @@ const Index = () => {
           title: `Распознано!`,
           description: `Обнаружена колонка: ${detectedColumn === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}`,
         });
+
+        lastExecutionTime = now;
       }
       
-      lastExecutionTime = Date.now();
+      isExecuting = false;
     };
 
     // Запускаем распознавание сразу при старте
@@ -1261,280 +1276,108 @@ const Index = () => {
           </Card>
         </div>
 
-        {predictionHistory.length > 0 && (
+        {history.length > 0 && (
           <Card className="bg-white/5 border-white/10 p-5">
             <div className="flex items-center gap-3 mb-4">
-              <Icon name="Target" size={20} className="text-[#8B5CF6]" />
-              <h3 className="text-xl font-bold">История прогнозов</h3>
-              <Badge className="bg-[#8B5CF6]/20 text-[#8B5CF6] border-none">
-                Точность: {((predictionHistory.filter(p => p.isCorrect).length / predictionHistory.length) * 100).toFixed(1)}%
-              </Badge>
+              <Icon name="History" size={20} className="text-[#8B5CF6]" />
+              <h3 className="text-xl font-bold">История событий и прогнозов</h3>
+              {predictionHistory.length > 0 && (
+                <Badge className="bg-[#8B5CF6]/20 text-[#8B5CF6] border-none">
+                  Точность: {((predictionHistory.filter(p => p.isCorrect).length / predictionHistory.length) * 100).toFixed(1)}%
+                </Badge>
+              )}
             </div>
             
-            <div className="max-h-64 overflow-y-auto space-y-2">
-              {predictionHistory.slice().reverse().map((pred, idx) => (
-                <div 
-                  key={pred.id}
-                  className={`flex items-center justify-between p-3 rounded-lg ${
-                    pred.isCorrect 
-                      ? 'bg-green-500/10 border border-green-500/30' 
-                      : 'bg-red-500/10 border border-red-500/30'
-                  } transition-colors`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-gray-500 text-sm w-8">#{predictionHistory.length - idx}</span>
-                    
-                    <div className="flex items-center gap-2">
-                      <div className="text-xs text-gray-400">Прогноз:</div>
-                      <Badge 
-                        className={`${
-                          pred.prediction === 'alpha' 
-                            ? 'bg-[#0EA5E9]' 
-                            : 'bg-[#8B5CF6]'
-                        } text-white border-none`}
-                      >
-                        {pred.prediction === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
-                      </Badge>
-                    </div>
+            <div className="max-h-96 overflow-y-auto space-y-2">
+              {history.slice().reverse().map((event, idx) => {
+                const eventNumber = history.length - idx;
+                const prediction = predictionHistory.find(p => 
+                  Math.abs(p.timestamp.getTime() - event.timestamp.getTime()) < 2000
+                );
 
-                    <Icon 
-                      name="ArrowRight" 
-                      size={16} 
-                      className="text-gray-500"
-                    />
-
-                    <div className="flex items-center gap-2">
-                      <div className="text-xs text-gray-400">Факт:</div>
-                      <Badge 
-                        className={`${
-                          pred.actual === 'alpha' 
-                            ? 'bg-[#0EA5E9]' 
-                            : 'bg-[#8B5CF6]'
-                        } text-white border-none`}
-                      >
-                        {pred.actual === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
-                      </Badge>
-                    </div>
-
-                    <Icon 
-                      name={pred.isCorrect ? "CheckCircle2" : "XCircle"} 
-                      size={20} 
-                      className={pred.isCorrect ? 'text-green-400' : 'text-red-400'}
-                    />
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="text-xs text-gray-400">
-                      Уверенность: <span className="text-white font-semibold">{pred.confidence.toFixed(1)}%</span>
-                    </div>
-                    <span className="text-gray-400 text-sm">
-                      {pred.timestamp.toLocaleTimeString('ru-RU')}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {methodHistory.length > 0 && (() => {
-          const methodStats = calculateMethodStats();
-          const bestMethod = methodStats[0];
-          
-          return (
-            <Card className="bg-white/5 border-white/10 p-5">
-              <div className="flex items-center gap-3 mb-4">
-                <Icon name="BarChart3" size={20} className="text-[#D946EF]" />
-                <h3 className="text-xl font-bold">Статистика методов анализа</h3>
-                {bestMethod && bestMethod.totalPredictions > 0 && (
-                  <Badge className="bg-[#D946EF]/20 text-[#D946EF] border-none">
-                    Лидер: {bestMethod.name === 'Pattern Recognition' ? 'Паттерны' : bestMethod.name === 'Frequency Analysis' ? 'Частота' : 'Марков'}
-                  </Badge>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                {methodStats.map((stat, idx) => (
-                  <Card 
-                    key={stat.name}
-                    className={`p-4 ${
-                      idx === 0 && stat.totalPredictions > 0
-                        ? 'bg-gradient-to-br from-[#D946EF]/20 to-[#8B5CF6]/20 border-[#D946EF]/50'
-                        : 'bg-white/5 border-white/10'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <Icon 
-                          name={
-                            stat.name === 'Pattern Recognition' ? 'Repeat' :
-                            stat.name === 'Frequency Analysis' ? 'PieChart' :
-                            'GitBranch'
-                          } 
-                          size={18}
-                          className={idx === 0 && stat.totalPredictions > 0 ? 'text-[#D946EF]' : 'text-gray-400'}
-                        />
-                        <span className="text-sm font-medium">
-                          {stat.name === 'Pattern Recognition' ? 'Паттерны' : 
-                           stat.name === 'Frequency Analysis' ? 'Частота' : 
-                           'Марков'}
-                        </span>
-                      </div>
-                      {idx === 0 && stat.totalPredictions > 0 && (
-                        <Icon name="Trophy" size={18} className="text-yellow-400" />
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between items-baseline">
-                        <span className="text-2xl font-bold text-white">
-                          {stat.accuracy.toFixed(1)}%
-                        </span>
-                        <span className="text-xs text-gray-400">точность</span>
-                      </div>
-
-                      <Progress 
-                        value={stat.accuracy} 
-                        className="h-2"
-                      />
-
-                      <div className="grid grid-cols-2 gap-2 pt-2 text-xs">
-                        <div>
-                          <div className="text-gray-400">Прогнозов:</div>
-                          <div className="font-semibold">{stat.totalPredictions}</div>
-                        </div>
-                        <div>
-                          <div className="text-gray-400">Верных:</div>
-                          <div className="font-semibold text-green-400">{stat.correctPredictions}</div>
-                        </div>
-                      </div>
-
-                      <div className="pt-2 border-t border-white/10">
-                        <div className="text-gray-400 text-xs">Средняя уверенность:</div>
-                        <div className="font-semibold text-sm">{stat.avgConfidence.toFixed(1)}%</div>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
-
-              <div className="max-h-96 overflow-y-auto space-y-3">
-                <h4 className="text-sm font-semibold text-gray-400 mb-2">Детальная история по методам</h4>
-                {methodHistory.slice().reverse().map((record, idx) => (
+                return (
                   <div 
-                    key={record.id}
+                    key={event.id}
                     className={`p-3 rounded-lg border ${
-                      record.isCorrect 
-                        ? 'bg-green-500/5 border-green-500/20' 
-                        : 'bg-red-500/5 border-red-500/20'
-                    }`}
+                      prediction
+                        ? prediction.isCorrect 
+                          ? 'bg-green-500/10 border-green-500/30' 
+                          : 'bg-red-500/10 border-red-500/30'
+                        : 'bg-white/5 border-white/10'
+                    } transition-colors`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
-                        <span className="text-gray-500 text-xs">#{methodHistory.length - idx}</span>
+                        <span className="text-gray-500 text-sm w-8">#{eventNumber}</span>
                         
-                        <Badge 
-                          variant="outline"
-                          className={`text-xs ${
-                            record.methodName === 'Pattern Recognition' 
-                              ? 'border-blue-500 text-blue-400' 
-                              : record.methodName === 'Frequency Analysis'
-                              ? 'border-green-500 text-green-400'
-                              : 'border-purple-500 text-purple-400'
-                          }`}
-                        >
-                          {record.methodName === 'Pattern Recognition' ? '🔄 Паттерны' : 
-                           record.methodName === 'Frequency Analysis' ? '📊 Частота' : 
-                           '🔀 Марков'}
-                        </Badge>
+                        {prediction && (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <div className="text-xs text-gray-400">Прогноз:</div>
+                              <Badge 
+                                className={`${
+                                  prediction.prediction === 'alpha' 
+                                    ? 'bg-[#0EA5E9]' 
+                                    : 'bg-[#8B5CF6]'
+                                } text-white border-none text-xs`}
+                              >
+                                {prediction.prediction === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
+                              </Badge>
+                            </div>
+
+                            <Icon 
+                              name="ArrowRight" 
+                              size={16} 
+                              className="text-gray-500"
+                            />
+                          </>
+                        )}
 
                         <div className="flex items-center gap-2">
+                          <div className="text-xs text-gray-400">{prediction ? 'Факт:' : 'Событие:'}</div>
                           <Badge 
                             className={`${
-                              record.prediction === 'alpha' 
+                              event.column === 'alpha' 
                                 ? 'bg-[#0EA5E9]' 
                                 : 'bg-[#8B5CF6]'
                             } text-white border-none text-xs`}
                           >
-                            {record.prediction === 'alpha' ? 'α' : 'ω'}
+                            {event.column === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
                           </Badge>
-
-                          <Icon 
-                            name="ArrowRight" 
-                            size={14} 
-                            className="text-gray-500"
-                          />
-
-                          <Badge 
-                            className={`${
-                              record.actual === 'alpha' 
-                                ? 'bg-[#0EA5E9]' 
-                                : 'bg-[#8B5CF6]'
-                            } text-white border-none text-xs`}
-                          >
-                            {record.actual === 'alpha' ? 'α' : 'ω'}
-                          </Badge>
-
-                          <Icon 
-                            name={record.isCorrect ? "Check" : "X"} 
-                            size={16} 
-                            className={record.isCorrect ? 'text-green-400' : 'text-red-400'}
-                          />
                         </div>
+
+                        {prediction && (
+                          <Icon 
+                            name={prediction.isCorrect ? "CheckCircle2" : "XCircle"} 
+                            size={20} 
+                            className={prediction.isCorrect ? 'text-green-400' : 'text-red-400'}
+                          />
+                        )}
                       </div>
 
-                      <div className="flex items-center gap-3 text-xs text-gray-400">
-                        <span>Уверенность: {record.confidence.toFixed(1)}%</span>
-                        <span>{record.timestamp.toLocaleTimeString('ru-RU')}</span>
+                      <div className="flex items-center gap-3">
+                        {prediction && (
+                          <div className="text-xs text-gray-400">
+                            Уверенность: <span className="text-white font-semibold">{prediction.confidence.toFixed(1)}%</span>
+                          </div>
+                        )}
+                        <Badge 
+                          variant="outline"
+                          className="text-xs border-gray-600 text-gray-400"
+                        >
+                          {event.source === 'screen' ? '📹 Авто' : '✋ Ручной'}
+                        </Badge>
+                        <span className="text-gray-400 text-sm">
+                          {event.timestamp.toLocaleTimeString('ru-RU')}
+                        </span>
                       </div>
                     </div>
                   </div>
-                ))}
-              </div>
-            </Card>
-          );
-        })()}
-
-        <Card className="bg-white/5 border-white/10 p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <Icon name="History" size={20} className="text-gray-400" />
-            <h3 className="text-xl font-bold">История событий</h3>
-          </div>
-          
-          <div className="max-h-64 overflow-y-auto space-y-2">
-            {history.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">Ожидание первого события...</p>
-            ) : (
-              history.slice().reverse().map((event, idx) => (
-                <div 
-                  key={event.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="text-gray-500 text-sm w-8">#{history.length - idx}</span>
-                    <Badge 
-                      className={`${
-                        event.column === 'alpha' 
-                          ? 'bg-[#0EA5E9]' 
-                          : 'bg-[#8B5CF6]'
-                      } text-white border-none`}
-                    >
-                      {event.column === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
-                    </Badge>
-                    {event.source === 'screen' && (
-                      <Badge variant="outline" className="text-xs border-green-500 text-green-400">
-                        Распознано
-                      </Badge>
-                    )}
-                  </div>
-                  <span className="text-gray-400 text-sm">
-                    {event.timestamp.toLocaleTimeString('ru-RU')}
-                  </span>
-                </div>
-              ))
-            )}
-          </div>
-        </Card>
+                );
+              })}
+            </div>
+          </Card>
+        )}
       </div>
     </div>
   );
