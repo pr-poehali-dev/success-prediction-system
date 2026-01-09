@@ -1310,29 +1310,6 @@ const Index = () => {
                       <div className="flex items-center gap-3">
                         <span className="text-gray-500 text-sm w-8">#{eventNumber}</span>
                         
-                        {prediction && (
-                          <>
-                            <div className="flex items-center gap-2">
-                              <div className="text-xs text-gray-400">Прогноз:</div>
-                              <Badge 
-                                className={`${
-                                  prediction.prediction === 'alpha' 
-                                    ? 'bg-[#0EA5E9]' 
-                                    : 'bg-[#8B5CF6]'
-                                } text-white border-none text-xs`}
-                              >
-                                {prediction.prediction === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
-                              </Badge>
-                            </div>
-
-                            <Icon 
-                              name="ArrowRight" 
-                              size={16} 
-                              className="text-gray-500"
-                            />
-                          </>
-                        )}
-
                         <div className="flex items-center gap-2">
                           <div className="text-xs text-gray-400">{prediction ? 'Факт:' : 'Событие:'}</div>
                           <Badge 
@@ -1347,20 +1324,36 @@ const Index = () => {
                         </div>
 
                         {prediction && (
-                          <Icon 
-                            name={prediction.isCorrect ? "CheckCircle2" : "XCircle"} 
-                            size={20} 
-                            className={prediction.isCorrect ? 'text-green-400' : 'text-red-400'}
-                          />
+                          <>
+                            <Icon 
+                              name="ArrowRight" 
+                              size={16} 
+                              className="text-gray-500"
+                            />
+
+                            <div className="flex items-center gap-2">
+                              <div className="text-xs text-gray-400">Прогноз:</div>
+                              <Badge 
+                                className={`${
+                                  prediction.prediction === 'alpha' 
+                                    ? 'bg-[#0EA5E9]' 
+                                    : 'bg-[#8B5CF6]'
+                                } text-white border-none text-xs`}
+                              >
+                                {prediction.prediction === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
+                              </Badge>
+                            </div>
+
+                            <Icon 
+                              name={prediction.isCorrect ? "CheckCircle2" : "XCircle"} 
+                              size={20} 
+                              className={prediction.isCorrect ? 'text-green-400' : 'text-red-400'}
+                            />
+                          </>
                         )}
                       </div>
 
                       <div className="flex items-center gap-3">
-                        {prediction && (
-                          <div className="text-xs text-gray-400">
-                            Уверенность: <span className="text-white font-semibold">{prediction.confidence.toFixed(1)}%</span>
-                          </div>
-                        )}
                         <Badge 
                           variant="outline"
                           className="text-xs border-gray-600 text-gray-400"
