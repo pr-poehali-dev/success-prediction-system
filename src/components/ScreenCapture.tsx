@@ -179,7 +179,7 @@ export const ScreenCapture = ({
           </>
         ) : (
           <>
-            <div className="relative bg-black rounded-lg overflow-hidden" style={{ aspectRatio: '16/9' }}>
+            <div className="relative bg-black rounded-lg overflow-hidden" style={{ aspectRatio: '21/9' }}>
               <video 
                 ref={videoRef} 
                 className="hidden"
