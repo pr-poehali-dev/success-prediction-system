@@ -461,7 +461,10 @@ const Index = () => {
   useEffect(() => {
     if (!isCapturing || !isRunning || isPaused || !captureArea) return;
 
-    const interval = setInterval(async () => {
+    let lastExecutionTime = Date.now();
+    let intervalId: number;
+
+    const performRecognition = async () => {
       const detectedColumn = await recognizeColorFromArea();
       
       if (detectedColumn) {
@@ -517,9 +520,30 @@ const Index = () => {
           description: `Обнаружена колонка: ${detectedColumn === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}`,
         });
       }
-    }, 30000);
+      
+      lastExecutionTime = Date.now();
+    };
 
-    return () => clearInterval(interval);
+    // Запускаем распознавание сразу при старте
+    performRecognition();
+
+    // Точный интервал с проверкой времени
+    const checkAndExecute = () => {
+      const now = Date.now();
+      const timeSinceLastExecution = now - lastExecutionTime;
+      
+      // Если прошло 30 секунд (с погрешностью 500мс)
+      if (timeSinceLastExecution >= 29500) {
+        performRecognition();
+      }
+    };
+
+    // Проверяем каждую секунду
+    intervalId = window.setInterval(checkAndExecute, 1000);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [isCapturing, isRunning, isPaused, captureArea, previousPrediction]);
 
   useEffect(() => {
@@ -571,8 +595,8 @@ const Index = () => {
         const scaleX = canvas.width / video.videoWidth;
         const scaleY = canvas.height / video.videoHeight;
 
-        ctx.strokeStyle = '#0EA5E9';
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1;
         ctx.strokeRect(
           captureArea.x * scaleX,
           captureArea.y * scaleY,
@@ -594,13 +618,13 @@ const Index = () => {
         const height = Math.abs(currentMousePos.y - selectionStart.y) * scaleY;
 
         // Полупрозрачная заливка
-        ctx.fillStyle = 'rgba(14, 165, 233, 0.2)';
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
         ctx.fillRect(x, y, width, height);
 
-        // Яркая рамка
-        ctx.strokeStyle = '#0EA5E9';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([10, 5]);
+        // Тонкая черная рамка
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 3]);
         ctx.strokeRect(x, y, width, height);
         ctx.setLineDash([]);
       }
