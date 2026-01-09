@@ -365,16 +365,17 @@ const Index = () => {
 
     const avgBrightness = totalBrightness / analyzedPixels;
     const brightnessPercent = (avgBrightness / 255) * 100;
-    const threshold = 39;
 
     setLastRecognizedText(
       `💡 Яркость: ${brightnessPercent.toFixed(1)}% (${avgBrightness.toFixed(0)}/255) | Пикс: ${analyzedPixels}`
     );
 
-    if (brightnessPercent < threshold) {
+    if (brightnessPercent < 39) {
       return 'alpha';
-    } else {
+    } else if (brightnessPercent > 40) {
       return 'omega';
+    } else {
+      return null;
     }
   };
 
