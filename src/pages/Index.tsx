@@ -51,8 +51,6 @@ const Index = () => {
   const [captureLogs, setCaptureLogs] = useState<string[]>([]);
   const [lastRecognizedColor, setLastRecognizedColor] = useState<Column | null>(null);
   const recognitionTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const colorConfirmationBuffer = useRef<(Column | null)[]>([]);
-  const MIN_CONFIRMATIONS = 3;
   const [brightnessHistory, setBrightnessHistory] = useState<number[]>([]);
   const [adaptiveWeights, setAdaptiveWeights] = useState<AdaptiveWeights>({
     pattern: 1.0,
@@ -168,7 +166,6 @@ const Index = () => {
 
         addLog(`✅ Распознан цвет: ${recognized === 'alpha' ? '🔵 Альфа' : '🟣 Омега'}`);
         setLastRecognizedColor(recognized);
-        colorConfirmationBuffer.current = []; // Сбрасываем буфер после успешного распознавания
         
         if (previousPrediction && ensemblePrediction) {
           const isCorrect = previousPrediction === recognized;
@@ -229,7 +226,7 @@ const Index = () => {
 
     recognitionTimerRef.current = setInterval(() => {
       performRecognition();
-    }, 500);
+    }, 30000);
 
     return () => {
       if (recognitionTimerRef.current) {
@@ -391,12 +388,17 @@ const Index = () => {
       const g = data[i + 1];
       const b = data[i + 2];
       
+      // Фильтруем черный фон: все компоненты должны быть > 30
+      const isBlack = r < 30 && g < 30 && b < 30;
+      if (isBlack) continue;
+      
       const brightness = (r + g + b) / 3;
-      if (brightness < 10) continue;
+      if (brightness < 40) continue;
       
       const { h, s, l } = rgbToHsl(r, g, b);
       
-      if (s > 15 && l > 20 && l < 80) {
+      // Игнорируем слабонасыщенные (серые) и очень темные цвета
+      if (s > 20 && l > 25 && l < 75) {
         totalHue += h;
         totalSat += s;
         totalLight += l;
@@ -427,31 +429,16 @@ const Index = () => {
       `🎨 Оттенок: ${avgHue.toFixed(0)}° | Насыщ: ${avgSat.toFixed(0)}% | 🔵${cyanCount} 🟣${purpleCount} (${analyzedPixels})`
     );
 
-    let detectedColor: Column | null = null;
-
     // Требуем явное преобладание и минимальное количество пикселей
     if (totalColorPixels < minColorPixels) {
       return null;
     }
 
-    if (cyanCount > purpleCount * 2 && cyanCount > 20) {
-      detectedColor = 'alpha';
-    } else if (purpleCount > cyanCount * 2 && purpleCount > 20) {
-      detectedColor = 'omega';
-    }
-
-    // Система подтверждения: добавляем в буфер
-    colorConfirmationBuffer.current.push(detectedColor);
-    if (colorConfirmationBuffer.current.length > MIN_CONFIRMATIONS) {
-      colorConfirmationBuffer.current.shift();
-    }
-
-    // Подтверждаем цвет только если он стабилен в последних N кадрах
-    if (colorConfirmationBuffer.current.length === MIN_CONFIRMATIONS) {
-      const confirmedColor = colorConfirmationBuffer.current[0];
-      if (confirmedColor && colorConfirmationBuffer.current.every(c => c === confirmedColor)) {
-        return confirmedColor;
-      }
+    // Требуем явное преобладание одного цвета над другим
+    if (cyanCount > purpleCount * 2.5 && cyanCount > 15) {
+      return 'alpha';
+    } else if (purpleCount > cyanCount * 2.5 && purpleCount > 15) {
+      return 'omega';
     }
     
     return null;
