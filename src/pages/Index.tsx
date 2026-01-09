@@ -401,13 +401,15 @@ const Index = () => {
       `🎨 Оттенок: ${avgHue.toFixed(0)}° | Насыщ: ${avgSat.toFixed(0)}% | Свет: ${avgLight.toFixed(0)}% | Пикс: ${analyzedPixels}`
     );
 
-    if (avgHue >= 160 && avgHue <= 220 && avgSat > 20) {
+    if (avgHue >= 160 && avgHue <= 220 && avgSat > 15) {
       return 'alpha';
-    } else if (avgHue >= 240 && avgHue <= 320 && avgSat > 20) {
-      return 'omega';
-    } else {
-      return null;
+    } else if ((avgHue >= 240 && avgHue <= 360) || (avgHue >= 0 && avgHue <= 20)) {
+      if (avgSat > 15) {
+        return 'omega';
+      }
     }
+    
+    return null;
   };
 
   const addManualEntry = (column: Column) => {
