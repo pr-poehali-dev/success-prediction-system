@@ -51,6 +51,7 @@ const Index = () => {
   const [captureLogs, setCaptureLogs] = useState<string[]>([]);
   const [lastRecognizedColor, setLastRecognizedColor] = useState<Column | null>(null);
   const recognitionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [brightnessHistory, setBrightnessHistory] = useState<number[]>([]);
   const [adaptiveWeights, setAdaptiveWeights] = useState<AdaptiveWeights>({
     pattern: 1.0,
     frequency: 1.0,
@@ -341,9 +342,8 @@ const Index = () => {
     );
 
     const data = imageData.data;
-    let totalDistance = 0;
+    let totalBrightness = 0;
     let analyzedPixels = 0;
-    let maxBrightness = 0;
 
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
@@ -351,17 +351,10 @@ const Index = () => {
       const b = data[i + 2];
       
       const brightness = (r + g + b) / 3;
-      if (brightness > maxBrightness) maxBrightness = brightness;
       
-      const distanceToWhite = Math.sqrt(
-        Math.pow(255 - r, 2) + 
-        Math.pow(255 - g, 2) + 
-        Math.pow(255 - b, 2)
-      );
+      if (brightness < 10) continue;
       
-      if (distanceToWhite > 450) continue;
-      
-      totalDistance += distanceToWhite;
+      totalBrightness += brightness;
       analyzedPixels++;
     }
 
@@ -370,13 +363,37 @@ const Index = () => {
       return null;
     }
 
-    const avgDistance = totalDistance / analyzedPixels;
+    const avgBrightness = totalBrightness / analyzedPixels;
+    
+    setBrightnessHistory(prev => {
+      const updated = [...prev, avgBrightness];
+      return updated.slice(-10);
+    });
+
+    const recentBrightness = [...brightnessHistory, avgBrightness].slice(-10);
+    
+    if (recentBrightness.length < 2) {
+      setLastRecognizedText(`💡 Яркость: ${avgBrightness.toFixed(1)} | Пикс: ${analyzedPixels} | Калибровка...`);
+      return null;
+    }
+
+    const uniqueValues = [...new Set(recentBrightness.map(b => Math.round(b / 5) * 5))];
+    
+    if (uniqueValues.length < 2) {
+      setLastRecognizedText(`💡 Яркость: ${avgBrightness.toFixed(1)} | Пикс: ${analyzedPixels} | Ожидание изменения...`);
+      return null;
+    }
+
+    const sortedUnique = uniqueValues.sort((a, b) => b - a);
+    const brighterThreshold = sortedUnique[0];
+    const darkerThreshold = sortedUnique[sortedUnique.length - 1];
+    const midpoint = (brighterThreshold + darkerThreshold) / 2;
 
     setLastRecognizedText(
-      `📏 Расст. до белого: ${avgDistance.toFixed(1)} | Макс яркость: ${maxBrightness.toFixed(0)} | Пикс: ${analyzedPixels}`
+      `💡 Яркость: ${avgBrightness.toFixed(1)} | Светлый: ${brighterThreshold} | Темный: ${darkerThreshold} | Порог: ${midpoint.toFixed(0)}`
     );
 
-    if (avgDistance <= 250) {
+    if (avgBrightness >= midpoint) {
       return 'alpha';
     } else {
       return 'omega';
