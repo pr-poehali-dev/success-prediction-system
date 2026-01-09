@@ -785,18 +785,20 @@ const Index = () => {
   const streaks = getStreaks();
 
   const getSequenceTrends = () => {
-    if (history.length < 3) return [];
+    if (history.length < 6) return [];
     
     const sequences = new Map<string, { count: number; nextAlpha: number; nextOmega: number }>();
     
-    for (let i = 0; i < history.length - 3; i++) {
+    for (let i = 0; i < history.length - 5; i++) {
       const seq = [
         history[i].column === 'alpha' ? 'α' : 'ω',
         history[i + 1].column === 'alpha' ? 'α' : 'ω',
-        history[i + 2].column === 'alpha' ? 'α' : 'ω'
+        history[i + 2].column === 'alpha' ? 'α' : 'ω',
+        history[i + 3].column === 'alpha' ? 'α' : 'ω',
+        history[i + 4].column === 'alpha' ? 'α' : 'ω'
       ].join('-');
       
-      const next = history[i + 3].column;
+      const next = history[i + 5].column;
       
       if (!sequences.has(seq)) {
         sequences.set(seq, { count: 0, nextAlpha: 0, nextOmega: 0 });
