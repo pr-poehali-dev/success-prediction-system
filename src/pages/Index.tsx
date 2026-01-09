@@ -341,8 +341,33 @@ const Index = () => {
       captureArea.height
     );
 
+    const rgbToHsl = (r: number, g: number, b: number) => {
+      r /= 255;
+      g /= 255;
+      b /= 255;
+      
+      const max = Math.max(r, g, b);
+      const min = Math.min(r, g, b);
+      let h = 0, s = 0, l = (max + min) / 2;
+
+      if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        
+        switch (max) {
+          case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+          case g: h = ((b - r) / d + 2) / 6; break;
+          case b: h = ((r - g) / d + 4) / 6; break;
+        }
+      }
+      
+      return { h: h * 360, s: s * 100, l: l * 100 };
+    };
+
     const data = imageData.data;
-    let totalBrightness = 0;
+    let totalHue = 0;
+    let totalSat = 0;
+    let totalLight = 0;
     let analyzedPixels = 0;
 
     for (let i = 0; i < data.length; i += 4) {
@@ -351,11 +376,16 @@ const Index = () => {
       const b = data[i + 2];
       
       const brightness = (r + g + b) / 3;
+      if (brightness < 10) continue;
       
-      if (brightness < 5) continue;
+      const { h, s, l } = rgbToHsl(r, g, b);
       
-      totalBrightness += brightness;
-      analyzedPixels++;
+      if (s > 15) {
+        totalHue += h;
+        totalSat += s;
+        totalLight += l;
+        analyzedPixels++;
+      }
     }
 
     if (analyzedPixels < 3) {
@@ -363,16 +393,17 @@ const Index = () => {
       return null;
     }
 
-    const avgBrightness = totalBrightness / analyzedPixels;
-    const brightnessPercent = (avgBrightness / 255) * 100;
+    const avgHue = totalHue / analyzedPixels;
+    const avgSat = totalSat / analyzedPixels;
+    const avgLight = totalLight / analyzedPixels;
 
     setLastRecognizedText(
-      `💡 Яркость: ${brightnessPercent.toFixed(1)}% (${avgBrightness.toFixed(0)}/255) | Пикс: ${analyzedPixels}`
+      `🎨 Оттенок: ${avgHue.toFixed(0)}° | Насыщ: ${avgSat.toFixed(0)}% | Свет: ${avgLight.toFixed(0)}% | Пикс: ${analyzedPixels}`
     );
 
-    if (brightnessPercent < 39) {
+    if (avgHue >= 160 && avgHue <= 220 && avgSat > 20) {
       return 'alpha';
-    } else if (brightnessPercent > 40) {
+    } else if (avgHue >= 240 && avgHue <= 320 && avgSat > 20) {
       return 'omega';
     } else {
       return null;
