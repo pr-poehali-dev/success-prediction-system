@@ -343,11 +343,15 @@ const Index = () => {
     const data = imageData.data;
     let totalDistance = 0;
     let analyzedPixels = 0;
+    let maxBrightness = 0;
 
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
+      
+      const brightness = (r + g + b) / 3;
+      if (brightness > maxBrightness) maxBrightness = brightness;
       
       const distanceToWhite = Math.sqrt(
         Math.pow(255 - r, 2) + 
@@ -355,13 +359,13 @@ const Index = () => {
         Math.pow(255 - b, 2)
       );
       
-      if (distanceToWhite > 400) continue;
+      if (distanceToWhite > 450) continue;
       
       totalDistance += distanceToWhite;
       analyzedPixels++;
     }
 
-    if (analyzedPixels < 5) {
+    if (analyzedPixels < 3) {
       setLastRecognizedText('❌ Недостаточно пикселей для анализа');
       return null;
     }
@@ -369,10 +373,10 @@ const Index = () => {
     const avgDistance = totalDistance / analyzedPixels;
 
     setLastRecognizedText(
-      `📏 Расстояние до белого: ${avgDistance.toFixed(1)} | Пикселей: ${analyzedPixels}`
+      `📏 Расст. до белого: ${avgDistance.toFixed(1)} | Макс яркость: ${maxBrightness.toFixed(0)} | Пикс: ${analyzedPixels}`
     );
 
-    if (avgDistance < 200) {
+    if (avgDistance <= 250) {
       return 'alpha';
     } else {
       return 'omega';
