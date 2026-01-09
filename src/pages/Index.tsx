@@ -51,6 +51,8 @@ const Index = () => {
   const [captureLogs, setCaptureLogs] = useState<string[]>([]);
   const [lastRecognizedColor, setLastRecognizedColor] = useState<Column | null>(null);
   const recognitionTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const colorConfirmationBuffer = useRef<(Column | null)[]>([]);
+  const MIN_CONFIRMATIONS = 3;
   const [brightnessHistory, setBrightnessHistory] = useState<number[]>([]);
   const [adaptiveWeights, setAdaptiveWeights] = useState<AdaptiveWeights>({
     pattern: 1.0,
@@ -158,8 +160,15 @@ const Index = () => {
       const recognized = await recognizeColorFromArea();
       
       if (recognized) {
+        // Проверяем, не повторяется ли тот же цвет
+        if (lastRecognizedColor === recognized) {
+          addLog('⚠️ Тот же цвет, игнорируем повтор');
+          return;
+        }
+
         addLog(`✅ Распознан цвет: ${recognized === 'alpha' ? '🔵 Альфа' : '🟣 Омега'}`);
         setLastRecognizedColor(recognized);
+        colorConfirmationBuffer.current = []; // Сбрасываем буфер после успешного распознавания
         
         if (previousPrediction && ensemblePrediction) {
           const isCorrect = previousPrediction === recognized;
@@ -220,7 +229,7 @@ const Index = () => {
 
     recognitionTimerRef.current = setInterval(() => {
       performRecognition();
-    }, 30000);
+    }, 500);
 
     return () => {
       if (recognitionTimerRef.current) {
@@ -383,26 +392,26 @@ const Index = () => {
       const b = data[i + 2];
       
       const brightness = (r + g + b) / 3;
-      if (brightness < 5) continue;
+      if (brightness < 10) continue;
       
       const { h, s, l } = rgbToHsl(r, g, b);
       
-      if (s > 8) {
+      if (s > 15 && l > 20 && l < 80) {
         totalHue += h;
         totalSat += s;
         totalLight += l;
         analyzedPixels++;
         
-        // Подсчёт голубых и фиолетовых пикселей
-        if (h >= 160 && h <= 200) {
+        // Подсчёт голубых и фиолетовых пикселей с узкими диапазонами
+        if (h >= 170 && h <= 195) {
           cyanCount++;
-        } else if (h >= 260 && h <= 310) {
+        } else if (h >= 270 && h <= 300) {
           purpleCount++;
         }
       }
     }
 
-    if (analyzedPixels < 1) {
+    if (analyzedPixels < 10) {
       setLastRecognizedText('❌ Недостаточно пикселей для анализа');
       return null;
     }
@@ -411,22 +420,38 @@ const Index = () => {
     const avgSat = totalSat / analyzedPixels;
     const avgLight = totalLight / analyzedPixels;
 
+    const totalColorPixels = cyanCount + purpleCount;
+    const minColorPixels = analyzedPixels * 0.1;
+
     setLastRecognizedText(
-      `🎨 Оттенок: ${avgHue.toFixed(0)}° | Насыщ: ${avgSat.toFixed(0)}% | Свет: ${avgLight.toFixed(0)}% | 🔵${cyanCount} 🟣${purpleCount}`
+      `🎨 Оттенок: ${avgHue.toFixed(0)}° | Насыщ: ${avgSat.toFixed(0)}% | 🔵${cyanCount} 🟣${purpleCount} (${analyzedPixels})`
     );
 
-    // Если есть явное преобладание голубых или фиолетовых пикселей
-    if (cyanCount > purpleCount * 1.5 && cyanCount > 5) {
-      return 'alpha';
-    } else if (purpleCount > cyanCount * 1.5 && purpleCount > 5) {
-      return 'omega';
+    let detectedColor: Column | null = null;
+
+    // Требуем явное преобладание и минимальное количество пикселей
+    if (totalColorPixels < minColorPixels) {
+      return null;
     }
-    
-    // Если по подсчёту неясно, проверяем средний оттенок
-    if (avgHue >= 160 && avgHue <= 210 && avgSat > 15) {
-      return 'alpha';
-    } else if (avgHue >= 260 && avgHue <= 310 && avgSat > 15) {
-      return 'omega';
+
+    if (cyanCount > purpleCount * 2 && cyanCount > 20) {
+      detectedColor = 'alpha';
+    } else if (purpleCount > cyanCount * 2 && purpleCount > 20) {
+      detectedColor = 'omega';
+    }
+
+    // Система подтверждения: добавляем в буфер
+    colorConfirmationBuffer.current.push(detectedColor);
+    if (colorConfirmationBuffer.current.length > MIN_CONFIRMATIONS) {
+      colorConfirmationBuffer.current.shift();
+    }
+
+    // Подтверждаем цвет только если он стабилен в последних N кадрах
+    if (colorConfirmationBuffer.current.length === MIN_CONFIRMATIONS) {
+      const confirmedColor = colorConfirmationBuffer.current[0];
+      if (confirmedColor && colorConfirmationBuffer.current.every(c => c === confirmedColor)) {
+        return confirmedColor;
+      }
     }
     
     return null;
