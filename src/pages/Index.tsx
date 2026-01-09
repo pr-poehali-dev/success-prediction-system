@@ -143,11 +143,12 @@ const Index = () => {
 
 
   useEffect(() => {
+    if (recognitionTimerRef.current) {
+      clearInterval(recognitionTimerRef.current);
+      recognitionTimerRef.current = null;
+    }
+
     if (!isRunning || isPaused || !isCapturing || !captureArea) {
-      if (recognitionTimerRef.current) {
-        clearInterval(recognitionTimerRef.current);
-        recognitionTimerRef.current = null;
-      }
       return;
     }
 
@@ -216,7 +217,9 @@ const Index = () => {
 
     performRecognition();
 
-    recognitionTimerRef.current = setInterval(performRecognition, 30000);
+    recognitionTimerRef.current = setInterval(() => {
+      performRecognition();
+    }, 30000);
 
     return () => {
       if (recognitionTimerRef.current) {
@@ -348,23 +351,23 @@ const Index = () => {
       const b = data[i + 2];
       
       const brightness = r + g + b;
-      if (brightness < 80 || brightness > 700) continue;
+      if (brightness < 60 || brightness > 720) continue;
       
       analyzedPixels++;
       
       const cyanSignal = (b + g) / 2 - r;
       const purpleSignal = (r + b) / 2 - g;
       
-      if (cyanSignal > 10) {
+      if (cyanSignal > 5) {
         cyanScore += cyanSignal;
       }
       
-      if (purpleSignal > 10) {
+      if (purpleSignal > 5) {
         purpleScore += purpleSignal;
       }
     }
 
-    if (analyzedPixels < 50) {
+    if (analyzedPixels < 30) {
       setLastRecognizedText('❌ Недостаточно пикселей для анализа');
       return null;
     }
@@ -376,11 +379,11 @@ const Index = () => {
       `🔵 Голубой: ${avgCyan.toFixed(1)} | 🟣 Фиолетовый: ${avgPurple.toFixed(1)} | Пикс: ${analyzedPixels}`
     );
 
-    if (avgCyan > avgPurple * 1.15 && avgCyan > 8) {
+    if (avgCyan > avgPurple && avgCyan > 5) {
       return 'alpha';
     }
 
-    if (avgPurple > avgCyan * 1.15 && avgPurple > 8) {
+    if (avgPurple > avgCyan && avgPurple > 5) {
       return 'omega';
     }
 
