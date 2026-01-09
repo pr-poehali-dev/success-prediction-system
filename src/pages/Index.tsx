@@ -1107,36 +1107,6 @@ const Index = () => {
           </Card>
         )}
 
-        {accuracyHistory.length > 5 && (
-          <Card className="bg-white/5 border-white/10 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <Icon name="LineChart" size={24} className="text-[#D946EF]" />
-              <h3 className="text-xl font-bold">Тренд точности прогнозов</h3>
-            </div>
-            
-            <div className="h-48 flex items-end gap-2">
-              {accuracyHistory.map((point, idx) => (
-                <div key={idx} className="flex-1 flex flex-col gap-1 items-center">
-                  <div className="w-full">
-                    <div 
-                      className="w-full bg-gradient-to-t from-[#8B5CF6] to-[#0EA5E9] rounded-t transition-all"
-                      style={{ height: `${(point.pattern / 100) * 180}px` }}
-                      title={`Точность: ${point.pattern.toFixed(1)}%`}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-            
-            <div className="flex gap-4 justify-center mt-4 text-sm">
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-gradient-to-br from-[#8B5CF6] to-[#0EA5E9] rounded" />
-                <span className="text-gray-400">Анализ последовательностей (5 событий)</span>
-              </div>
-            </div>
-          </Card>
-        )}
-
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {predictions.map((pred, idx) => (
             <Card key={idx} className="bg-white/5 border-white/10 p-5">
@@ -1184,7 +1154,7 @@ const Index = () => {
           ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Card className="bg-white/5 border-white/10 p-5">
             <div className="flex items-center gap-3 mb-3">
               <Icon name="BarChart3" size={20} className="text-[#0EA5E9]" />
@@ -1206,47 +1176,6 @@ const Index = () => {
                 <span className="font-bold text-[#8B5CF6]">
                   {stats.omega} ({stats.total > 0 ? ((stats.omega / stats.total) * 100).toFixed(1) : 0}%)
                 </span>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="bg-white/5 border-white/10 p-5">
-            <div className="flex items-center gap-3 mb-3">
-              <Icon name="Flame" size={20} className="text-orange-500" />
-              <h4 className="font-semibold">Серии</h4>
-            </div>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-gray-400">Текущая серия:</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">{streaks.current}</span>
-                  <Badge 
-                    variant="outline" 
-                    className={`${
-                      history[history.length - 1]?.column === 'alpha'
-                        ? 'border-[#0EA5E9] text-[#0EA5E9]' 
-                        : 'border-[#8B5CF6] text-[#8B5CF6]'
-                    }`}
-                  >
-                    {history[history.length - 1]?.column === 'alpha' ? 'α' : 'ω'}
-                  </Badge>
-                </div>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-400">Максимальная:</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-bold">{streaks.max}</span>
-                  <Badge 
-                    variant="outline" 
-                    className={`${
-                      streaks.column === 'alpha'
-                        ? 'border-[#0EA5E9] text-[#0EA5E9]' 
-                        : 'border-[#8B5CF6] text-[#8B5CF6]'
-                    }`}
-                  >
-                    {streaks.column === 'alpha' ? 'α' : 'ω'}
-                  </Badge>
-                </div>
               </div>
             </div>
           </Card>
