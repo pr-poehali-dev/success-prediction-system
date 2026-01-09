@@ -376,11 +376,11 @@ const Index = () => {
       const b = data[i + 2];
       
       const brightness = (r + g + b) / 3;
-      if (brightness < 10) continue;
+      if (brightness < 5) continue;
       
       const { h, s, l } = rgbToHsl(r, g, b);
       
-      if (s > 15) {
+      if (s > 5) {
         totalHue += h;
         totalSat += s;
         totalLight += l;
@@ -388,7 +388,7 @@ const Index = () => {
       }
     }
 
-    if (analyzedPixels < 3) {
+    if (analyzedPixels < 1) {
       setLastRecognizedText('❌ Недостаточно пикселей для анализа');
       return null;
     }
@@ -401,12 +401,10 @@ const Index = () => {
       `🎨 Оттенок: ${avgHue.toFixed(0)}° | Насыщ: ${avgSat.toFixed(0)}% | Свет: ${avgLight.toFixed(0)}% | Пикс: ${analyzedPixels}`
     );
 
-    if (avgHue >= 160 && avgHue <= 220 && avgSat > 15) {
+    if (avgHue >= 150 && avgHue <= 230 && avgSat > 10) {
       return 'alpha';
-    } else if ((avgHue >= 240 && avgHue <= 360) || (avgHue >= 0 && avgHue <= 20)) {
-      if (avgSat > 15) {
-        return 'omega';
-      }
+    } else if (avgHue >= 230 && avgHue <= 320 && avgSat > 10) {
+      return 'omega';
     }
     
     return null;
