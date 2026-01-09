@@ -90,162 +90,99 @@ const Index = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  const analyzePattern = (recHist: Column[]): AlgorithmPrediction => {
-    if (recHist.length < 3) {
+  const analyzeSequencePattern = (recHist: Column[]): AlgorithmPrediction => {
+    if (recHist.length < 5) {
       return {
-        name: 'Pattern Recognition',
+        name: 'Анализ последовательностей',
         prediction: 'alpha',
         confidence: 50,
         accuracy: 0,
-        description: 'Поиск повторяющихся последовательностей'
+        description: 'Поиск похожих последовательностей из 5 событий в истории'
       };
     }
 
-    const last3 = recHist.slice(-3);
-    const pattern = last3.join('');
+    // Берем последние 5 событий как текущую последовательность
+    const last5 = recHist.slice(-5);
+    const currentPattern = last5.join('-');
     
-    const allPatterns = recHist.slice(0, -1).map((_, i) => 
-      recHist.slice(i, i + 3).join('')
-    );
+    // Ищем все похожие последовательности в истории (до текущей)
+    const matches: Column[] = [];
     
-    const nextAfterPattern = allPatterns
-      .map((p, i) => p === pattern ? recHist[i + 3] : null)
-      .filter(Boolean) as Column[];
+    for (let i = 0; i <= recHist.length - 6; i++) {
+      const historicalPattern = recHist.slice(i, i + 5).join('-');
+      
+      // Если нашли такую же последовательность в прошлом
+      if (historicalPattern === currentPattern) {
+        // Смотрим, что было после неё
+        const nextEvent = recHist[i + 5];
+        if (nextEvent) {
+          matches.push(nextEvent);
+        }
+      }
+    }
 
-    const alphaCount = nextAfterPattern.filter(c => c === 'alpha').length;
-    const omegaCount = nextAfterPattern.filter(c => c === 'omega').length;
+    // Подсчитываем, что чаще было после такой последовательности
+    const alphaCount = matches.filter(c => c === 'alpha').length;
+    const omegaCount = matches.filter(c => c === 'omega').length;
     
-    const prediction: Column = alphaCount >= omegaCount ? 'alpha' : 'omega';
-    const confidence = Math.min(95, 50 + (Math.abs(alphaCount - omegaCount) / (nextAfterPattern.length || 1)) * 45);
+    let prediction: Column;
+    let confidence: number;
     
-    const correct = recHist.slice(3).filter((col, i) => {
-      const prevPattern = recHist.slice(i, i + 3).join('');
-      const nextCol = recHist[i + 3];
-      const expectedNext = allPatterns
-        .map((p, j) => p === prevPattern ? recHist[j + 3] : null)
-        .filter(Boolean) as Column[];
-      const alphaC = expectedNext.filter(c => c === 'alpha').length;
-      const omegaC = expectedNext.filter(c => c === 'omega').length;
-      const expectedCol: Column = alphaC >= omegaC ? 'alpha' : 'omega';
-      return nextCol === expectedCol;
-    }).length;
+    if (matches.length === 0) {
+      // Такой последовательности еще не было - предсказываем с минимальной уверенностью
+      prediction = 'alpha';
+      confidence = 50;
+    } else {
+      // Предсказываем то, что чаще было после такой последовательности
+      prediction = alphaCount >= omegaCount ? 'alpha' : 'omega';
+      const dominantCount = Math.max(alphaCount, omegaCount);
+      confidence = Math.min(95, 50 + (dominantCount / matches.length) * 45);
+    }
     
-    const accuracy = recHist.length > 3 ? (correct / (recHist.length - 3)) * 100 : 0;
+    // Рассчитываем точность метода на всей истории
+    let correctPredictions = 0;
+    let totalPredictions = 0;
+    
+    for (let i = 5; i < recHist.length; i++) {
+      const testPattern = recHist.slice(i - 5, i).join('-');
+      const actualNext = recHist[i];
+      
+      // Ищем что было после такой последовательности раньше
+      const historicalMatches: Column[] = [];
+      for (let j = 0; j < i - 5; j++) {
+        if (recHist.slice(j, j + 5).join('-') === testPattern) {
+          historicalMatches.push(recHist[j + 5]);
+        }
+      }
+      
+      if (historicalMatches.length > 0) {
+        const alphaC = historicalMatches.filter(c => c === 'alpha').length;
+        const omegaC = historicalMatches.filter(c => c === 'omega').length;
+        const predictedNext: Column = alphaC >= omegaC ? 'alpha' : 'omega';
+        
+        if (predictedNext === actualNext) {
+          correctPredictions++;
+        }
+        totalPredictions++;
+      }
+    }
+    
+    const accuracy = totalPredictions > 0 ? (correctPredictions / totalPredictions) * 100 : 0;
 
     return {
-      name: 'Pattern Recognition',
+      name: 'Анализ последовательностей',
       prediction,
       confidence,
       accuracy,
-      description: 'Поиск повторяющихся последовательностей'
+      description: `Найдено совпадений: ${matches.length} (А:${alphaCount}, О:${omegaCount})`
     };
   };
 
-  const analyzeFrequency = (recHist: Column[]): AlgorithmPrediction => {
-    const alphaCount = recHist.filter(c => c === 'alpha').length;
-    const omegaCount = recHist.filter(c => c === 'omega').length;
-    const total = recHist.length;
 
-    if (total === 0) {
-      return {
-        name: 'Frequency Analysis',
-        prediction: 'alpha',
-        confidence: 50,
-        accuracy: 0,
-        description: 'Анализ частоты появлений'
-      };
-    }
 
-    const alphaProb = alphaCount / total;
-    const omegaProb = omegaCount / total;
-    
-    const prediction: Column = alphaProb < omegaProb ? 'alpha' : 'omega';
-    const confidence = Math.abs(alphaProb - omegaProb) * 100;
-    
-    const correct = recHist.filter((col, idx) => {
-      const prevAlpha = recHist.slice(0, idx).filter(c => c === 'alpha').length;
-      const prevOmega = recHist.slice(0, idx).filter(c => c === 'omega').length;
-      const expectedCol: Column = prevAlpha >= prevOmega ? 'alpha' : 'omega';
-      return col === expectedCol;
-    }).length;
-    
-    const accuracy = recHist.length > 0 ? (correct / recHist.length) * 100 : 0;
 
-    return {
-      name: 'Frequency Analysis',
-      prediction,
-      confidence: Math.min(95, 50 + confidence / 2),
-      accuracy,
-      description: 'Анализ частоты появлений'
-    };
-  };
 
-  const analyzeMarkov = (recHist: Column[]): AlgorithmPrediction => {
-    if (recHist.length < 2) {
-      return {
-        name: 'Markov Chain',
-        prediction: 'omega',
-        confidence: 50,
-        accuracy: 0,
-        description: 'Цепи Маркова (переходы между состояниями)'
-      };
-    }
 
-    const lastCol = recHist[recHist.length - 1];
-    
-    const transitions = recHist.slice(0, -1).reduce((acc, from, i) => {
-      const to = recHist[i + 1];
-      if (!acc[from]) acc[from] = {};
-      acc[from][to] = (acc[from][to] || 0) + 1;
-      return acc;
-    }, {} as Record<Column, Record<Column, number>>);
-
-    const trans = transitions[lastCol] || {};
-    const alphaProb = trans['alpha'] || 0;
-    const omegaProb = trans['omega'] || 0;
-    const total = alphaProb + omegaProb;
-    
-    const prediction: Column = alphaProb >= omegaProb ? 'alpha' : 'omega';
-    const confidence = total > 0 ? Math.abs(alphaProb - omegaProb) / total * 100 : 50;
-
-    const correct = recHist.slice(1).filter((col, i) => {
-      const prevCol = recHist[i];
-      const trans = transitions[prevCol] || {};
-      const alphaProb = trans['alpha'] || 0;
-      const omegaProb = trans['omega'] || 0;
-      const expectedCol: Column = alphaProb >= omegaProb ? 'alpha' : 'omega';
-      return col === expectedCol;
-    }).length;
-    
-    const accuracy = recHist.length > 1 ? (correct / (recHist.length - 1)) * 100 : 0;
-
-    return {
-      name: 'Markov Chain',
-      prediction,
-      confidence: Math.min(95, 50 + confidence / 2),
-      accuracy,
-      description: 'Цепи Маркова (переходы между состояниями)'
-    };
-  };
-
-  const calculateEnsemble = (preds: AlgorithmPrediction[]) => {
-    const votes = { alpha: 0, omega: 0 };
-    let totalWeight = 0;
-
-    preds.forEach(pred => {
-      const weight = pred.accuracy || 50;
-      votes[pred.prediction] += weight;
-      totalWeight += weight;
-    });
-
-    const alphaScore = votes.alpha / totalWeight;
-    const omegaScore = votes.omega / totalWeight;
-
-    const column: Column = alphaScore > omegaScore ? 'alpha' : 'omega';
-    const confidence = Math.max(alphaScore, omegaScore) * 100;
-
-    return { column, confidence };
-  };
 
   const startScreenCapture = async () => {
     try {
@@ -643,28 +580,27 @@ const Index = () => {
 
   useEffect(() => {
     if (recognizedHistory.length > 0) {
-      const pattern = analyzePattern(recognizedHistory);
-      const frequency = analyzeFrequency(recognizedHistory);
-      const markov = analyzeMarkov(recognizedHistory);
+      const sequenceAnalysis = analyzeSequencePattern(recognizedHistory);
       
-      const newPredictions = [pattern, frequency, markov];
-      setPredictions(newPredictions);
+      setPredictions([sequenceAnalysis]);
       
-      const ensemble = calculateEnsemble(newPredictions);
-      setEnsemblePrediction(ensemble);
-      setPreviousPrediction(ensemble.column);
+      setEnsemblePrediction({
+        column: sequenceAnalysis.prediction,
+        confidence: sequenceAnalysis.confidence
+      });
+      setPreviousPrediction(sequenceAnalysis.prediction);
 
       setAccuracyHistory(prev => [...prev, {
         timestamp: Date.now(),
-        pattern: pattern.accuracy,
-        frequency: frequency.accuracy,
-        markov: markov.accuracy
+        pattern: sequenceAnalysis.accuracy,
+        frequency: 0,
+        markov: 0
       }].slice(-20));
     }
   }, [recognizedHistory]);
 
   const calculateMethodStats = (): MethodStats[] => {
-    const methods = ['Pattern Recognition', 'Frequency Analysis', 'Markov Chain'];
+    const methods = ['Анализ последовательностей'];
     
     return methods.map(methodName => {
       const methodRecords = methodHistory.filter(h => h.methodName === methodName);
@@ -673,7 +609,7 @@ const Index = () => {
       const accuracy = totalPredictions > 0 ? (correctPredictions / totalPredictions) * 100 : 0;
       const avgConfidence = totalPredictions > 0 
         ? methodRecords.reduce((sum, r) => sum + r.confidence, 0) / totalPredictions 
-        : 0;
+      : 0;
       
       return {
         name: methodName,
@@ -1122,12 +1058,12 @@ const Index = () => {
           <Card className="bg-gradient-to-br from-[#8B5CF6]/20 to-[#0EA5E9]/20 border-[#8B5CF6]/30 p-6">
             <div className="flex items-center gap-3 mb-4">
               <Icon name="TrendingUp" size={24} className="text-[#8B5CF6]" />
-              <h3 className="text-2xl font-bold">Ансамбльный прогноз</h3>
+              <h3 className="text-2xl font-bold">Прогноз на основе последовательностей</h3>
             </div>
             
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-400 mb-2">Рекомендуемая ставка:</p>
+                <p className="text-gray-400 mb-2">Следующее событие:</p>
                 <div className="flex items-center gap-3">
                   <Badge 
                     className={`text-xl py-2 px-4 ${
@@ -1160,27 +1096,17 @@ const Index = () => {
           <Card className="bg-white/5 border-white/10 p-6">
             <div className="flex items-center gap-3 mb-4">
               <Icon name="LineChart" size={24} className="text-[#D946EF]" />
-              <h3 className="text-xl font-bold">Тренд точности алгоритмов</h3>
+              <h3 className="text-xl font-bold">Тренд точности прогнозов</h3>
             </div>
             
-            <div className="h-48 flex items-end gap-1">
+            <div className="h-48 flex items-end gap-2">
               {accuracyHistory.map((point, idx) => (
                 <div key={idx} className="flex-1 flex flex-col gap-1 items-center">
-                  <div className="w-full flex flex-col gap-1">
+                  <div className="w-full">
                     <div 
-                      className="w-full bg-[#0EA5E9]/50 rounded-t transition-all"
-                      style={{ height: `${(point.pattern / 100) * 140}px` }}
-                      title={`Pattern: ${point.pattern.toFixed(1)}%`}
-                    />
-                    <div 
-                      className="w-full bg-[#8B5CF6]/50 rounded-t transition-all"
-                      style={{ height: `${(point.frequency / 100) * 140}px` }}
-                      title={`Frequency: ${point.frequency.toFixed(1)}%`}
-                    />
-                    <div 
-                      className="w-full bg-[#D946EF]/50 rounded-t transition-all"
-                      style={{ height: `${(point.markov / 100) * 140}px` }}
-                      title={`Markov: ${point.markov.toFixed(1)}%`}
+                      className="w-full bg-gradient-to-t from-[#8B5CF6] to-[#0EA5E9] rounded-t transition-all"
+                      style={{ height: `${(point.pattern / 100) * 180}px` }}
+                      title={`Точность: ${point.pattern.toFixed(1)}%`}
                     />
                   </div>
                 </div>
@@ -1189,16 +1115,8 @@ const Index = () => {
             
             <div className="flex gap-4 justify-center mt-4 text-sm">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-[#0EA5E9]/50 rounded" />
-                <span className="text-gray-400">Pattern</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-[#8B5CF6]/50 rounded" />
-                <span className="text-gray-400">Frequency</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="w-3 h-3 bg-[#D946EF]/50 rounded" />
-                <span className="text-gray-400">Markov</span>
+                <div className="w-3 h-3 bg-gradient-to-br from-[#8B5CF6] to-[#0EA5E9] rounded" />
+                <span className="text-gray-400">Анализ последовательностей (5 событий)</span>
               </div>
             </div>
           </Card>
