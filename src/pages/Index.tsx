@@ -784,6 +784,49 @@ const Index = () => {
 
   const streaks = getStreaks();
 
+  const getSequenceTrends = () => {
+    if (history.length < 3) return [];
+    
+    const sequences = new Map<string, { count: number; nextAlpha: number; nextOmega: number }>();
+    
+    for (let i = 0; i < history.length - 3; i++) {
+      const seq = [
+        history[i].column === 'alpha' ? 'α' : 'ω',
+        history[i + 1].column === 'alpha' ? 'α' : 'ω',
+        history[i + 2].column === 'alpha' ? 'α' : 'ω'
+      ].join('-');
+      
+      const next = history[i + 3].column;
+      
+      if (!sequences.has(seq)) {
+        sequences.set(seq, { count: 0, nextAlpha: 0, nextOmega: 0 });
+      }
+      
+      const data = sequences.get(seq)!;
+      data.count++;
+      if (next === 'alpha') {
+        data.nextAlpha++;
+      } else {
+        data.nextOmega++;
+      }
+    }
+    
+    return Array.from(sequences.entries())
+      .filter(([_, data]) => data.count >= 2)
+      .map(([seq, data]) => ({
+        sequence: seq,
+        count: data.count,
+        nextAlpha: data.nextAlpha,
+        nextOmega: data.nextOmega,
+        prediction: data.nextAlpha > data.nextOmega ? 'alpha' : 'omega',
+        confidence: Math.max(data.nextAlpha, data.nextOmega) / data.count * 100
+      }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  };
+
+  const sequenceTrends = getSequenceTrends();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#1A1F2C] via-[#221F26] to-[#1A1F2C] text-white p-6">
       <video ref={videoRef} className="hidden" />
@@ -1204,6 +1247,78 @@ const Index = () => {
             </div>
           </Card>
         </div>
+
+        {sequenceTrends.length > 0 && (
+          <Card className="bg-white/5 border-white/10 p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Icon name="TrendingUp" size={24} className="text-[#D946EF]" />
+              <h3 className="text-xl font-bold">Тренды последовательностей</h3>
+              <Badge className="bg-[#D946EF]/20 text-[#D946EF] border-none">
+                Найдено паттернов: {sequenceTrends.length}
+              </Badge>
+            </div>
+            
+            <div className="space-y-3">
+              {sequenceTrends.map((trend, idx) => (
+                <div 
+                  key={idx}
+                  className="bg-white/5 rounded-lg p-4 border border-white/10"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        {trend.sequence.split('-').map((symbol, i) => (
+                          <Badge 
+                            key={i}
+                            className={`${
+                              symbol === 'α' 
+                                ? 'bg-[#0EA5E9] text-white' 
+                                : 'bg-[#8B5CF6] text-white'
+                            } border-none text-sm font-bold`}
+                          >
+                            {symbol}
+                          </Badge>
+                        ))}
+                        <span className="text-gray-400">→</span>
+                        <Badge 
+                          className={`${
+                            trend.prediction === 'alpha' 
+                              ? 'bg-[#0EA5E9]/30 text-[#0EA5E9] border-[#0EA5E9]' 
+                              : 'bg-[#8B5CF6]/30 text-[#8B5CF6] border-[#8B5CF6]'
+                          } border text-sm font-bold`}
+                        >
+                          {trend.prediction === 'alpha' ? 'α' : 'ω'}
+                        </Badge>
+                      </div>
+                      
+                      <div className="flex items-center gap-4 text-sm">
+                        <div className="text-gray-400">
+                          Встречалась: <span className="text-white font-semibold">{trend.count} раз</span>
+                        </div>
+                        <div className="text-gray-400">
+                          Точность: <span className="text-white font-semibold">{trend.confidence.toFixed(0)}%</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2 text-xs">
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded bg-[#0EA5E9]" />
+                        <span className="text-gray-400">{trend.nextAlpha}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-3 h-3 rounded bg-[#8B5CF6]" />
+                        <span className="text-gray-400">{trend.nextOmega}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <Progress value={trend.confidence} className="h-1.5 mt-3" />
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {history.length > 0 && (
           <Card className="bg-white/5 border-white/10 p-5">
