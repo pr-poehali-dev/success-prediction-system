@@ -343,6 +343,8 @@ const Index = () => {
     const data = imageData.data;
     let totalBrightness = 0;
     let analyzedPixels = 0;
+    let lightPixels = 0;
+    let darkPixels = 0;
 
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
@@ -351,30 +353,36 @@ const Index = () => {
       
       const brightness = (r + g + b) / 3;
       
-      if (brightness < 30 || brightness > 240) continue;
+      if (brightness < 20) continue;
       
       totalBrightness += brightness;
       analyzedPixels++;
+      
+      if (brightness > 140) {
+        lightPixels++;
+      } else if (brightness < 100) {
+        darkPixels++;
+      }
     }
 
-    if (analyzedPixels < 10) {
+    if (analyzedPixels < 5) {
       setLastRecognizedText('❌ Недостаточно пикселей для анализа');
       return null;
     }
 
     const avgBrightness = totalBrightness / analyzedPixels;
+    const lightRatio = (lightPixels / analyzedPixels) * 100;
+    const darkRatio = (darkPixels / analyzedPixels) * 100;
 
     setLastRecognizedText(
-      `💡 Яркость: ${avgBrightness.toFixed(1)} | Пикселей: ${analyzedPixels}`
+      `💡 Яркость: ${avgBrightness.toFixed(1)} | Светлых: ${lightRatio.toFixed(0)}% | Темных: ${darkRatio.toFixed(0)}%`
     );
 
-    if (avgBrightness > 130) {
+    if (avgBrightness >= 115 || lightRatio > 30) {
       return 'alpha';
-    } else if (avgBrightness < 130) {
+    } else {
       return 'omega';
     }
-
-    return null;
   };
 
   const addManualEntry = (column: Column) => {
