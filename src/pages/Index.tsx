@@ -583,10 +583,15 @@ const Index = () => {
 
       // Отрисовка процесса выделения
       if (isSelectingArea && selectionStart && currentMousePos) {
-        const x = Math.min(selectionStart.x, currentMousePos.x);
-        const y = Math.min(selectionStart.y, currentMousePos.y);
-        const width = Math.abs(currentMousePos.x - selectionStart.x);
-        const height = Math.abs(currentMousePos.y - selectionStart.y);
+        // Преобразуем координаты мыши в координаты canvas
+        const canvasRect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / canvasRect.width;
+        const scaleY = canvas.height / canvasRect.height;
+        
+        const x = Math.min(selectionStart.x, currentMousePos.x) * scaleX;
+        const y = Math.min(selectionStart.y, currentMousePos.y) * scaleY;
+        const width = Math.abs(currentMousePos.x - selectionStart.x) * scaleX;
+        const height = Math.abs(currentMousePos.y - selectionStart.y) * scaleY;
 
         // Полупрозрачная заливка
         ctx.fillStyle = 'rgba(14, 165, 233, 0.2)';
