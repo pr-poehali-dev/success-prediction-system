@@ -352,7 +352,7 @@ const Index = () => {
       
       const brightness = (r + g + b) / 3;
       
-      if (brightness < 10) continue;
+      if (brightness < 5) continue;
       
       totalBrightness += brightness;
       analyzedPixels++;
@@ -364,36 +364,14 @@ const Index = () => {
     }
 
     const avgBrightness = totalBrightness / analyzedPixels;
-    
-    setBrightnessHistory(prev => {
-      const updated = [...prev, avgBrightness];
-      return updated.slice(-10);
-    });
-
-    const recentBrightness = [...brightnessHistory, avgBrightness].slice(-10);
-    
-    if (recentBrightness.length < 2) {
-      setLastRecognizedText(`💡 Яркость: ${avgBrightness.toFixed(1)} | Пикс: ${analyzedPixels} | Калибровка...`);
-      return null;
-    }
-
-    const uniqueValues = [...new Set(recentBrightness.map(b => Math.round(b / 5) * 5))];
-    
-    if (uniqueValues.length < 2) {
-      setLastRecognizedText(`💡 Яркость: ${avgBrightness.toFixed(1)} | Пикс: ${analyzedPixels} | Ожидание изменения...`);
-      return null;
-    }
-
-    const sortedUnique = uniqueValues.sort((a, b) => b - a);
-    const brighterThreshold = sortedUnique[0];
-    const darkerThreshold = sortedUnique[sortedUnique.length - 1];
-    const midpoint = (brighterThreshold + darkerThreshold) / 2;
+    const brightnessPercent = (avgBrightness / 255) * 100;
+    const threshold = 39;
 
     setLastRecognizedText(
-      `💡 Яркость: ${avgBrightness.toFixed(1)} | Светлый: ${brighterThreshold} | Темный: ${darkerThreshold} | Порог: ${midpoint.toFixed(0)}`
+      `💡 Яркость: ${brightnessPercent.toFixed(1)}% (${avgBrightness.toFixed(0)}/255) | Пикс: ${analyzedPixels}`
     );
 
-    if (avgBrightness >= midpoint) {
+    if (brightnessPercent < threshold) {
       return 'alpha';
     } else {
       return 'omega';
