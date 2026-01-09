@@ -422,22 +422,25 @@ const Index = () => {
     const avgSat = totalSat / analyzedPixels;
     const avgLight = totalLight / analyzedPixels;
 
-    const totalColorPixels = cyanCount + purpleCount;
     const minColorPixels = analyzedPixels * 0.1;
 
     setLastRecognizedText(
       `🎨 Оттенок: ${avgHue.toFixed(0)}° | Насыщ: ${avgSat.toFixed(0)}% | 🔵${cyanCount} 🟣${purpleCount} (${analyzedPixels})`
     );
 
-    // Требуем явное преобладание и минимальное количество пикселей
-    if (totalColorPixels < minColorPixels) {
+    // Проверяем, достаточно ли цветных пикселей для анализа
+    if (analyzedPixels < minColorPixels) {
       return null;
     }
 
-    // Требуем явное преобладание одного цвета над другим
-    if (cyanCount > purpleCount * 2.5 && cyanCount > 15) {
+    // НОВАЯ ЛОГИКА: Если много голубого - это АЛЬФА, иначе - ОМЕГА
+    // Проверяем явное преобладание голубого цвета
+    if (cyanCount > 15 && cyanCount > analyzedPixels * 0.05) {
       return 'alpha';
-    } else if (purpleCount > cyanCount * 2.5 && purpleCount > 15) {
+    }
+    
+    // Если есть цветные пиксели, но НЕ голубой - значит это фиолетовый (ОМЕГА)
+    if (analyzedPixels > 50) {
       return 'omega';
     }
     
