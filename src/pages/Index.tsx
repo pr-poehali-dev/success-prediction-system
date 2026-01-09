@@ -334,6 +334,11 @@ const Index = () => {
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0);
 
+    // Повышение контрастности
+    ctx.filter = 'contrast(1.8) saturate(1.5) brightness(1.1)';
+    ctx.drawImage(canvas, 0, 0);
+    ctx.filter = 'none';
+
     const imageData = ctx.getImageData(
       captureArea.x,
       captureArea.y,
@@ -365,6 +370,8 @@ const Index = () => {
     };
 
     const data = imageData.data;
+    let cyanCount = 0;
+    let purpleCount = 0;
     let totalHue = 0;
     let totalSat = 0;
     let totalLight = 0;
@@ -380,11 +387,18 @@ const Index = () => {
       
       const { h, s, l } = rgbToHsl(r, g, b);
       
-      if (s > 5) {
+      if (s > 8) {
         totalHue += h;
         totalSat += s;
         totalLight += l;
         analyzedPixels++;
+        
+        // Подсчёт голубых и фиолетовых пикселей
+        if (h >= 160 && h <= 200) {
+          cyanCount++;
+        } else if (h >= 260 && h <= 310) {
+          purpleCount++;
+        }
       }
     }
 
@@ -398,12 +412,20 @@ const Index = () => {
     const avgLight = totalLight / analyzedPixels;
 
     setLastRecognizedText(
-      `🎨 Оттенок: ${avgHue.toFixed(0)}° | Насыщ: ${avgSat.toFixed(0)}% | Свет: ${avgLight.toFixed(0)}% | Пикс: ${analyzedPixels}`
+      `🎨 Оттенок: ${avgHue.toFixed(0)}° | Насыщ: ${avgSat.toFixed(0)}% | Свет: ${avgLight.toFixed(0)}% | 🔵${cyanCount} 🟣${purpleCount}`
     );
 
-    if (avgHue >= 150 && avgHue <= 230 && avgSat > 10) {
+    // Если есть явное преобладание голубых или фиолетовых пикселей
+    if (cyanCount > purpleCount * 1.5 && cyanCount > 5) {
       return 'alpha';
-    } else if (avgHue >= 230 && avgHue <= 320 && avgSat > 10) {
+    } else if (purpleCount > cyanCount * 1.5 && purpleCount > 5) {
+      return 'omega';
+    }
+    
+    // Если по подсчёту неясно, проверяем средний оттенок
+    if (avgHue >= 160 && avgHue <= 210 && avgSat > 15) {
+      return 'alpha';
+    } else if (avgHue >= 260 && avgHue <= 310 && avgSat > 15) {
       return 'omega';
     }
     
