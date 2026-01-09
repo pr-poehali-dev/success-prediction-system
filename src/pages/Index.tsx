@@ -1354,6 +1354,11 @@ const Index = () => {
                       </div>
 
                       <div className="flex items-center gap-3">
+                        {prediction && (
+                          <div className="text-xs text-gray-400">
+                            Уверенность: <span className="text-white font-semibold">{prediction.confidence.toFixed(1)}%</span>
+                          </div>
+                        )}
                         <Badge 
                           variant="outline"
                           className="text-xs border-gray-600 text-gray-400"
