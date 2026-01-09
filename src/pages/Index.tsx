@@ -83,6 +83,7 @@ const Index = () => {
   const [captureArea, setCaptureArea] = useState<CaptureArea | null>(null);
   const [isSelectingArea, setIsSelectingArea] = useState(false);
   const [selectionStart, setSelectionStart] = useState<{ x: number; y: number } | null>(null);
+  const [currentMousePos, setCurrentMousePos] = useState<{ x: number; y: number } | null>(null);
   const [lastRecognizedText, setLastRecognizedText] = useState<string>('');
   
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -303,6 +304,17 @@ const Index = () => {
     const y = e.clientY - rect.top;
     
     setSelectionStart({ x, y });
+    setCurrentMousePos({ x, y });
+  };
+
+  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isSelectingArea || !selectionStart || !previewCanvasRef.current) return;
+    
+    const rect = previewCanvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    
+    setCurrentMousePos({ x, y });
   };
 
   const handleCanvasMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
@@ -325,10 +337,23 @@ const Index = () => {
     setCaptureArea(area);
     setIsSelectingArea(false);
     setSelectionStart(null);
+    setCurrentMousePos(null);
     
     toast({
       title: "Область выбрана",
       description: "Теперь нажмите 'Начать' для запуска распознавания",
+    });
+  };
+
+  const handleReselectArea = () => {
+    setCaptureArea(null);
+    setIsSelectingArea(true);
+    setSelectionStart(null);
+    setCurrentMousePos(null);
+    
+    toast({
+      title: "Выберите область заново",
+      description: "Нарисуйте прямоугольник на превью",
     });
   };
 
@@ -541,6 +566,7 @@ const Index = () => {
 
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+      // Отрисовка выбранной области
       if (captureArea) {
         const scaleX = canvas.width / video.videoWidth;
         const scaleY = canvas.height / video.videoHeight;
@@ -555,6 +581,25 @@ const Index = () => {
         );
       }
 
+      // Отрисовка процесса выделения
+      if (isSelectingArea && selectionStart && currentMousePos) {
+        const x = Math.min(selectionStart.x, currentMousePos.x);
+        const y = Math.min(selectionStart.y, currentMousePos.y);
+        const width = Math.abs(currentMousePos.x - selectionStart.x);
+        const height = Math.abs(currentMousePos.y - selectionStart.y);
+
+        // Полупрозрачная заливка
+        ctx.fillStyle = 'rgba(14, 165, 233, 0.2)';
+        ctx.fillRect(x, y, width, height);
+
+        // Яркая рамка
+        ctx.strokeStyle = '#0EA5E9';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 5]);
+        ctx.strokeRect(x, y, width, height);
+        ctx.setLineDash([]);
+      }
+
       animationId = requestAnimationFrame(updatePreview);
     };
 
@@ -565,7 +610,7 @@ const Index = () => {
         cancelAnimationFrame(animationId);
       }
     };
-  }, [isCapturing, captureArea]);
+  }, [isCapturing, captureArea, isSelectingArea, selectionStart, currentMousePos]);
 
   useEffect(() => {
     if (recognizedHistory.length > 0) {
@@ -915,16 +960,29 @@ const Index = () => {
                     : 'Ожидание выбора области...'
                 }
               </p>
-              <canvas
-                ref={previewCanvasRef}
-                onMouseDown={handleCanvasMouseDown}
-                onMouseUp={handleCanvasMouseUp}
-                className={`w-full border-2 ${
-                  isSelectingArea ? 'border-yellow-500 cursor-crosshair' : 'border-white/20'
-                } rounded-lg`}
-                width={640}
-                height={360}
-              />
+              <div className="space-y-2">
+                <canvas
+                  ref={previewCanvasRef}
+                  onMouseDown={handleCanvasMouseDown}
+                  onMouseMove={handleCanvasMouseMove}
+                  onMouseUp={handleCanvasMouseUp}
+                  className={`w-full border-2 ${
+                    isSelectingArea ? 'border-yellow-500 cursor-crosshair' : 'border-white/20'
+                  } rounded-lg`}
+                  width={640}
+                  height={360}
+                />
+                {captureArea && !isRunning && (
+                  <Button
+                    onClick={handleReselectArea}
+                    variant="outline"
+                    className="border-yellow-500 text-yellow-400 hover:bg-yellow-500/10 w-full"
+                  >
+                    <Icon name="RefreshCw" size={16} className="mr-2" />
+                    Изменить область захвата
+                  </Button>
+                )}
+              </div>
             </div>
           </Card>
         )}
