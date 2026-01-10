@@ -831,21 +831,20 @@ const Index = () => {
   const sequenceTrends = getSequenceTrends();
 
   const getTopSequences = () => {
-    if (history.length < 7) return [];
+    if (history.length < 6) return [];
     
     const sequences = new Map<string, { count: number; nextAlpha: number; nextOmega: number }>();
     
-    for (let i = 0; i < history.length - 6; i++) {
+    for (let i = 0; i < history.length - 5; i++) {
       const seq = [
         history[i].column === 'alpha' ? 'α' : 'ω',
         history[i + 1].column === 'alpha' ? 'α' : 'ω',
         history[i + 2].column === 'alpha' ? 'α' : 'ω',
         history[i + 3].column === 'alpha' ? 'α' : 'ω',
-        history[i + 4].column === 'alpha' ? 'α' : 'ω',
-        history[i + 5].column === 'alpha' ? 'α' : 'ω'
+        history[i + 4].column === 'alpha' ? 'α' : 'ω'
       ].join('-');
       
-      const next = history[i + 6].column;
+      const next = history[i + 5].column;
       
       if (!sequences.has(seq)) {
         sequences.set(seq, { count: 0, nextAlpha: 0, nextOmega: 0 });
@@ -884,12 +883,12 @@ const Index = () => {
   };
 
   const getPrediction = () => {
-    if (history.length < 6) return null;
+    if (history.length < 5) return null;
     
-    const lastSix = history.slice(-6).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
+    const lastFive = history.slice(-5).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
     const topSequences = getTopSequences();
     
-    const match = topSequences.find(s => s.sequence === lastSix);
+    const match = topSequences.find(s => s.sequence === lastFive);
     
     if (!match) return null;
     
@@ -928,6 +927,7 @@ const Index = () => {
               <Badge className="bg-[#0EA5E9]/20 text-[#0EA5E9] border-none">
                 Всего паттернов: {topSequences.length}
               </Badge>
+              <span className="text-gray-400 text-sm ml-2">(5 событий → прогноз 6-го)</span>
             </div>
             
             <div className="space-y-3">
