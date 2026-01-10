@@ -105,13 +105,9 @@ export const ScreenCaptureSection = ({
   const handleCanvasMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isSelectingArea || !previewCanvasRef.current) return;
     
-    const canvas = previewCanvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = 640 / rect.width;
-    const scaleY = 360 / rect.height;
-    
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
+    const rect = previewCanvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
     
     setSelectionStart({ x, y });
     setCurrentMousePos({ x, y });
@@ -120,13 +116,9 @@ export const ScreenCaptureSection = ({
   const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isSelectingArea || !selectionStart || !previewCanvasRef.current) return;
     
-    const canvas = previewCanvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = 640 / rect.width;
-    const scaleY = 360 / rect.height;
-    
-    const x = (e.clientX - rect.left) * scaleX;
-    const y = (e.clientY - rect.top) * scaleY;
+    const rect = previewCanvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
     
     setCurrentMousePos({ x, y });
   };
@@ -134,13 +126,9 @@ export const ScreenCaptureSection = ({
   const handleCanvasMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!isSelectingArea || !selectionStart || !previewCanvasRef.current) return;
     
-    const canvas = previewCanvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = 640 / rect.width;
-    const scaleY = 360 / rect.height;
-    
-    const endX = (e.clientX - rect.left) * scaleX;
-    const endY = (e.clientY - rect.top) * scaleY;
+    const rect = previewCanvasRef.current.getBoundingClientRect();
+    const endX = e.clientX - rect.left;
+    const endY = e.clientY - rect.top;
     
     const x = Math.min(selectionStart.x, endX);
     const y = Math.min(selectionStart.y, endY);
@@ -148,14 +136,14 @@ export const ScreenCaptureSection = ({
     const height = Math.abs(endY - selectionStart.y);
     
     if (width > 20 && height > 20) {
-      const videoScaleX = videoRef.current ? videoRef.current.videoWidth / 640 : 1;
-      const videoScaleY = videoRef.current ? videoRef.current.videoHeight / 360 : 1;
+      const scaleX = videoRef.current ? videoRef.current.videoWidth / 640 : 1;
+      const scaleY = videoRef.current ? videoRef.current.videoHeight / 360 : 1;
       
       setCaptureArea({
-        x: Math.round(x * videoScaleX),
-        y: Math.round(y * videoScaleY),
-        width: Math.round(width * videoScaleX),
-        height: Math.round(height * videoScaleY)
+        x: Math.round(x * scaleX),
+        y: Math.round(y * scaleY),
+        width: Math.round(width * scaleX),
+        height: Math.round(height * scaleY)
       });
       
       setIsSelectingArea(false);
@@ -249,6 +237,10 @@ export const ScreenCaptureSection = ({
     const ctx = canvas.getContext('2d');
     if (!ctx || !videoRef.current.videoWidth) return;
 
+    const rect = canvas.getBoundingClientRect();
+    const canvasScaleX = 640 / rect.width;
+    const canvasScaleY = 360 / rect.height;
+
     ctx.clearRect(0, 0, 640, 360);
     ctx.drawImage(videoRef.current, 0, 0, 640, 360);
 
@@ -270,10 +262,10 @@ export const ScreenCaptureSection = ({
       ctx.strokeStyle = '#eab308';
       ctx.lineWidth = 2;
       ctx.strokeRect(
-        selectionStart.x,
-        selectionStart.y,
-        currentMousePos.x - selectionStart.x,
-        currentMousePos.y - selectionStart.y
+        selectionStart.x * canvasScaleX,
+        selectionStart.y * canvasScaleY,
+        (currentMousePos.x - selectionStart.x) * canvasScaleX,
+        (currentMousePos.y - selectionStart.y) * canvasScaleY
       );
     }
   };
