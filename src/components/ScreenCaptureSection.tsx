@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -276,8 +276,6 @@ export const ScreenCaptureSection = ({
         currentMousePos.y - selectionStart.y
       );
     }
-
-    requestAnimationFrame(updatePreview);
   };
 
   const handleStart = () => {
@@ -307,17 +305,35 @@ export const ScreenCaptureSection = ({
   };
 
   // Effect для захвата и анализа каждые 30 секунд
-  if (isRunning && !isPaused && captureArea) {
+  useEffect(() => {
+    if (!isRunning || isPaused || !captureArea) return;
+
     const interval = setInterval(() => {
       captureAndAnalyze();
     }, 30000);
+    
     return () => clearInterval(interval);
-  }
+  }, [isRunning, isPaused, captureArea]);
 
   // Effect для обновления превью
-  if (isCapturing && videoRef.current) {
-    updatePreview();
-  }
+  useEffect(() => {
+    if (!isCapturing || !videoRef.current) return;
+
+    let animationId: number;
+    
+    const animate = () => {
+      updatePreview();
+      animationId = requestAnimationFrame(animate);
+    };
+    
+    animationId = requestAnimationFrame(animate);
+    
+    return () => {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+      }
+    };
+  }, [isCapturing, captureArea, isSelectingArea, selectionStart, currentMousePos]);
 
   return (
     <>
