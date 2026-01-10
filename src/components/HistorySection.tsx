@@ -27,50 +27,20 @@ interface HistorySectionProps {
   lastPredictionResult: 'correct' | 'incorrect' | null;
 }
 
-export const HistorySection = ({ history, predictionHistory, lastPredictionResult }: HistorySectionProps) => {
-  return (
-    <>
-      {lastPredictionResult && (
-        <Card className={`${
-          lastPredictionResult === 'correct' 
-            ? 'bg-green-500/10 border-green-500/30' 
-            : 'bg-red-500/10 border-red-500/30'
-        } p-6 animate-scale-in`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Icon 
-                name={lastPredictionResult === 'correct' ? "CheckCircle2" : "XCircle"} 
-                size={32} 
-                className={lastPredictionResult === 'correct' ? 'text-green-400' : 'text-red-400'}
-              />
-              <div>
-                <h3 className={`text-2xl font-bold ${
-                  lastPredictionResult === 'correct' ? 'text-green-400' : 'text-red-400'
-                }`}>
-                  {lastPredictionResult === 'correct' ? 'Прогноз верный!' : 'Прогноз неверный'}
-                </h3>
-                <p className="text-gray-400">
-                  {lastPredictionResult === 'correct' 
-                    ? 'Система точно предсказала следующее событие'
-                    : 'Система ошиблась в прогнозе'}
-                </p>
-              </div>
-            </div>
-            
-            {lastPredictionResult === 'correct' && (
-              <div className="text-6xl">🎯</div>
-            )}
-          </div>
-        </Card>
-      )}
+interface StatsSectionProps {
+  predictionHistory: PredictionHistory[];
+}
 
-      {predictionHistory.length > 0 && (
-        <Card className="bg-gradient-to-br from-[#0EA5E9]/5 via-[#8B5CF6]/5 to-[#D946EF]/5 border-white/10 p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <Icon name="TrendingUp" size={24} className="text-[#0EA5E9]" />
-            <h3 className="text-xl font-bold">Статистика точности системы</h3>
-          </div>
-          
+export const StatsSection = ({ predictionHistory }: StatsSectionProps) => {
+  return (
+    <Card className="bg-gradient-to-br from-[#0EA5E9]/5 via-[#8B5CF6]/5 to-[#D946EF]/5 border-white/10 p-6">
+      <div className="flex items-center gap-3 mb-4">
+        <Icon name="TrendingUp" size={24} className="text-[#0EA5E9]" />
+        <h3 className="text-xl font-bold">Статистика точности системы</h3>
+      </div>
+      
+      {predictionHistory.length > 0 ? (
+        <>
           <div className="grid grid-cols-4 gap-4">
             <div className="bg-white/5 rounded-lg p-4 border border-white/10">
               <div className="text-sm text-gray-400 mb-1">Всего прогнозов</div>
@@ -128,6 +98,50 @@ export const HistorySection = ({ history, predictionHistory, lastPredictionResul
                 </span>
               </div>
             </div>
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-8">
+          <p className="text-gray-400 text-center">Пока нет данных о прогнозах</p>
+        </div>
+      )}
+    </Card>
+  );
+};
+
+export const HistorySection = ({ history, predictionHistory, lastPredictionResult }: HistorySectionProps) => {
+  return (
+    <>
+      {lastPredictionResult && (
+        <Card className={`${
+          lastPredictionResult === 'correct' 
+            ? 'bg-green-500/10 border-green-500/30' 
+            : 'bg-red-500/10 border-red-500/30'
+        } p-6 animate-scale-in`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Icon 
+                name={lastPredictionResult === 'correct' ? "CheckCircle2" : "XCircle"} 
+                size={32} 
+                className={lastPredictionResult === 'correct' ? 'text-green-400' : 'text-red-400'}
+              />
+              <div>
+                <h3 className={`text-2xl font-bold ${
+                  lastPredictionResult === 'correct' ? 'text-green-400' : 'text-red-400'
+                }`}>
+                  {lastPredictionResult === 'correct' ? 'Прогноз верный!' : 'Прогноз неверный'}
+                </h3>
+                <p className="text-gray-400">
+                  {lastPredictionResult === 'correct' 
+                    ? 'Система точно предсказала следующее событие'
+                    : 'Система ошиблась в прогнозе'}
+                </p>
+              </div>
+            </div>
+            
+            {lastPredictionResult === 'correct' && (
+              <div className="text-6xl">🎯</div>
+            )}
           </div>
         </Card>
       )}
