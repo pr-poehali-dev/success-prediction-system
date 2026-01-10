@@ -1623,54 +1623,6 @@ const Index = () => {
           </Card>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="bg-[#0EA5E9]/10 border-[#0EA5E9]/30 p-8 relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-[#0EA5E9]/20 to-transparent"></div>
-            <div className="relative z-10 text-center space-y-4">
-              <div className="flex items-center justify-center gap-3">
-                <Icon name="Waves" size={32} className="text-[#0EA5E9]" />
-                <h2 className="text-3xl font-bold text-[#0EA5E9]">АЛЬФА</h2>
-              </div>
-              
-              {currentSuccess === 'alpha' && (
-                <div className="animate-scale-in">
-                  <Badge className="text-2xl py-3 px-6 bg-[#0EA5E9] text-white border-none animate-pulse">
-                    SUCCESS
-                  </Badge>
-                </div>
-              )}
-              
-              <div className="text-5xl font-bold text-[#0EA5E9]/80 mt-8">
-                {stats.alpha}
-              </div>
-              <p className="text-gray-400">появлений</p>
-            </div>
-          </Card>
-
-          <Card className="bg-[#8B5CF6]/10 border-[#8B5CF6]/30 p-8 relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-[#8B5CF6]/20 to-transparent"></div>
-            <div className="relative z-10 text-center space-y-4">
-              <div className="flex items-center justify-center gap-3">
-                <Icon name="Sparkles" size={32} className="text-[#8B5CF6]" />
-                <h2 className="text-3xl font-bold text-[#8B5CF6]">ОМЕГА</h2>
-              </div>
-              
-              {currentSuccess === 'omega' && (
-                <div className="animate-scale-in">
-                  <Badge className="text-2xl py-3 px-6 bg-[#8B5CF6] text-white border-none animate-pulse">
-                    SUCCESS
-                  </Badge>
-                </div>
-              )}
-              
-              <div className="text-5xl font-bold text-[#8B5CF6]/80 mt-8">
-                {stats.omega}
-              </div>
-              <p className="text-gray-400">появлений</p>
-            </div>
-          </Card>
-        </div>
-
         <Card className="bg-white/5 border-white/10 p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
