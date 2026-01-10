@@ -1,4 +1,3 @@
-import { TopPatternsCard } from '@/components/analytics/TopPatternsCard';
 import { AdaptivePredictionCard } from '@/components/analytics/AdaptivePredictionCard';
 import { SystemStatsCard } from '@/components/analytics/SystemStatsCard';
 import { StrategySelectionCard } from '@/components/analytics/StrategySelectionCard';
@@ -279,15 +278,13 @@ export const PredictionAnalytics = ({ history, stats, predictionHistory }: Predi
     };
   };
 
-  const { topOverall: topSequences } = getAdaptiveAnalysis();
   const prediction = getAdaptivePrediction();
   const balanceAccuracy = calculateStrategyAccuracy('balance');
   const overallAccuracy = calculateStrategyAccuracy('overall');
 
   return (
     <>
-      <TopPatternsCard topSequences={topSequences} prediction={prediction} />
-      <AdaptivePredictionCard prediction={prediction} />
+      <AdaptivePredictionCard prediction={prediction} predictionHistory={predictionHistory} />
       <SystemStatsCard predictionHistory={predictionHistory} />
       <StrategySelectionCard 
         historyLength={history.length}
