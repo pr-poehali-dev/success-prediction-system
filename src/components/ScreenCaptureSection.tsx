@@ -136,14 +136,22 @@ export const ScreenCaptureSection = ({
     const height = Math.abs(endY - selectionStart.y);
     
     if (width > 20 && height > 20) {
-      const scaleX = videoRef.current ? videoRef.current.videoWidth / 640 : 1;
-      const scaleY = videoRef.current ? videoRef.current.videoHeight / 360 : 1;
+      const displayToCanvasX = 640 / rect.width;
+      const displayToCanvasY = 360 / rect.height;
+      
+      const canvasX = x * displayToCanvasX;
+      const canvasY = y * displayToCanvasY;
+      const canvasWidth = width * displayToCanvasX;
+      const canvasHeight = height * displayToCanvasY;
+      
+      const canvasToVideoX = videoRef.current ? videoRef.current.videoWidth / 640 : 1;
+      const canvasToVideoY = videoRef.current ? videoRef.current.videoHeight / 360 : 1;
       
       setCaptureArea({
-        x: Math.round(x * scaleX),
-        y: Math.round(y * scaleY),
-        width: Math.round(width * scaleX),
-        height: Math.round(height * scaleY)
+        x: Math.round(canvasX * canvasToVideoX),
+        y: Math.round(canvasY * canvasToVideoY),
+        width: Math.round(canvasWidth * canvasToVideoX),
+        height: Math.round(canvasHeight * canvasToVideoY)
       });
       
       setIsSelectingArea(false);
