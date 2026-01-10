@@ -833,10 +833,10 @@ const Index = () => {
   const getTopSequences = () => {
     if (history.length < 6) return [];
     
-    const sequences = new Map<string, { count: number; nextAlpha: number; nextOmega: number }>();
+    const sequences = new Map<string, { count: number; nextAlpha: number; nextOmega: number; fullSequence: string }>();
     
     for (let i = 0; i < history.length - 5; i++) {
-      const seq = [
+      const first5 = [
         history[i].column === 'alpha' ? 'α' : 'ω',
         history[i + 1].column === 'alpha' ? 'α' : 'ω',
         history[i + 2].column === 'alpha' ? 'α' : 'ω',
@@ -844,34 +844,38 @@ const Index = () => {
         history[i + 4].column === 'alpha' ? 'α' : 'ω'
       ].join('-');
       
-      const next = history[i + 5].column;
+      const sixth = history[i + 5].column === 'alpha' ? 'α' : 'ω';
+      const fullSeq = first5 + '-' + sixth;
       
-      if (!sequences.has(seq)) {
-        sequences.set(seq, { count: 0, nextAlpha: 0, nextOmega: 0 });
+      if (!sequences.has(first5)) {
+        sequences.set(first5, { count: 0, nextAlpha: 0, nextOmega: 0, fullSequence: '' });
       }
       
-      const data = sequences.get(seq)!;
+      const data = sequences.get(first5)!;
       data.count++;
-      if (next === 'alpha') {
+      if (sixth === 'α') {
         data.nextAlpha++;
       } else {
         data.nextOmega++;
       }
+      data.fullSequence = fullSeq;
     }
     
     return Array.from(sequences.entries())
       .filter(([_, data]) => data.count >= 2)
-      .map(([seq, data]) => {
+      .map(([first5, data]) => {
         const alphaProb = (data.nextAlpha / data.count) * 100;
         const omegaProb = (data.nextOmega / data.count) * 100;
         const maxProb = Math.max(alphaProb, omegaProb);
         
         return {
-          sequence: seq,
+          first5: first5,
+          fullSequence: data.fullSequence,
           count: data.count,
           nextAlpha: data.nextAlpha,
           nextOmega: data.nextOmega,
           prediction: alphaProb > omegaProb ? 'alpha' : 'omega',
+          sixthEvent: alphaProb > omegaProb ? 'α' : 'ω',
           confidence: maxProb,
           alphaProb,
           omegaProb
@@ -888,12 +892,14 @@ const Index = () => {
     const lastFive = history.slice(-5).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
     const topSequences = getTopSequences();
     
-    const match = topSequences.find(s => s.sequence === lastFive);
+    const match = topSequences.find(s => s.first5 === lastFive);
     
     if (!match) return null;
     
     return {
-      sequence: match.sequence,
+      first5: match.first5,
+      fullSequence: match.fullSequence,
+      sixthEvent: match.sixthEvent,
       prediction: match.prediction,
       confidence: match.confidence,
       alphaProb: match.alphaProb,
@@ -935,7 +941,7 @@ const Index = () => {
                 <div 
                   key={idx}
                   className={`bg-white/5 rounded-lg p-4 border ${
-                    prediction && seq.sequence === prediction.sequence
+                    prediction && seq.first5 === prediction.first5
                       ? 'border-[#D946EF] bg-[#D946EF]/10'
                       : 'border-white/10'
                   }`}
@@ -947,28 +953,18 @@ const Index = () => {
                       </Badge>
                       
                       <div className="flex items-center gap-2">
-                        {seq.sequence.split('-').map((symbol, i) => (
+                        {seq.fullSequence.split('-').map((symbol, i) => (
                           <Badge 
                             key={i}
                             className={`${
                               symbol === 'α' 
                                 ? 'bg-[#0EA5E9] text-white' 
                                 : 'bg-[#8B5CF6] text-white'
-                            } border-none text-sm font-bold`}
+                            } border-none text-sm font-bold ${i === 5 ? 'ring-2 ring-[#D946EF]' : ''}`}
                           >
                             {symbol}
                           </Badge>
                         ))}
-                        <span className="text-gray-400">→</span>
-                        <Badge 
-                          className={`${
-                            seq.prediction === 'alpha' 
-                              ? 'bg-[#0EA5E9]/30 text-[#0EA5E9] border-[#0EA5E9]' 
-                              : 'bg-[#8B5CF6]/30 text-[#8B5CF6] border-[#8B5CF6]'
-                          } border text-sm font-bold`}
-                        >
-                          {seq.prediction === 'alpha' ? 'α' : 'ω'}
-                        </Badge>
                       </div>
                       
                       <div className="flex items-center gap-4 text-sm">
@@ -993,12 +989,12 @@ const Index = () => {
                     </div>
                   </div>
                   
-                  {prediction && seq.sequence === prediction.sequence && (
+                  {prediction && seq.first5 === prediction.first5 && (
                     <div className="mt-3 pt-3 border-t border-[#D946EF]/30">
                       <div className="flex items-center gap-2">
                         <Icon name="Sparkles" size={16} className="text-[#D946EF]" />
                         <span className="text-[#D946EF] font-semibold text-sm">
-                          Такая последовательность уже была! Следующее событие: {seq.prediction === 'alpha' ? 'Альфа' : 'Омега'}
+                          Такая последовательность уже была! Шестое событие с вероятностью {seq.confidence.toFixed(0)}%: {seq.prediction === 'alpha' ? 'Альфа' : 'Омега'}
                         </span>
                       </div>
                     </div>
