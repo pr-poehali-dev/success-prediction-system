@@ -1081,44 +1081,220 @@ const Index = () => {
           <p className="text-gray-400">Адаптивная система прогнозирования с машинным обучением</p>
           <p className="text-sm text-gray-500">Анализ паттернов из 5 событий • Автоматический выбор стратегии • Самообучение</p>
           
-          {history.length > 0 && (
-            <div className="mt-4 max-w-md mx-auto">
-              <div className="bg-white/5 rounded-lg p-3 border border-white/10">
-                <div className="flex items-center justify-between mb-2 text-xs text-gray-400">
-                  <span>α: {stats.alpha}</span>
-                  <span className={`font-semibold ${
-                    Math.abs(stats.alpha - stats.omega) < 3 ? 'text-green-400' :
-                    Math.abs(stats.alpha - stats.omega) < 6 ? 'text-yellow-400' : 'text-red-400'
-                  }`}>
-                    Баланс: {((Math.min(stats.alpha, stats.omega) / Math.max(stats.alpha, stats.omega)) * 100).toFixed(0)}%
-                  </span>
-                  <span>ω: {stats.omega}</span>
-                </div>
-                <div className="relative h-3 bg-white/10 rounded-full overflow-hidden">
-                  <div 
-                    className="absolute left-0 top-0 h-full bg-gradient-to-r from-[#0EA5E9] to-[#0EA5E9]/80 transition-all duration-300"
-                    style={{ width: `${(stats.alpha / (stats.alpha + stats.omega)) * 100}%` }}
-                  />
-                  <div 
-                    className="absolute right-0 top-0 h-full bg-gradient-to-l from-[#8B5CF6] to-[#8B5CF6]/80 transition-all duration-300"
-                    style={{ width: `${(stats.omega / (stats.alpha + stats.omega)) * 100}%` }}
-                  />
-                  <div className="absolute left-1/2 top-0 w-0.5 h-full bg-white/50 -translate-x-1/2" />
-                </div>
-                <div className="flex items-center justify-center mt-2 text-xs">
-                  <span className={`${
-                    Math.abs(stats.alpha - stats.omega) < 3 ? 'text-green-400' :
-                    Math.abs(stats.alpha - stats.omega) < 6 ? 'text-yellow-400' : 'text-red-400'
-                  }`}>
-                    {Math.abs(stats.alpha - stats.omega) < 3 ? '✓ Система сбалансирована' :
-                     Math.abs(stats.alpha - stats.omega) < 6 ? '⚠ Небольшой дисбаланс' : 
-                     `⚡ Дисбаланс: ${stats.alpha > stats.omega ? 'α' : 'ω'} доминирует`}
-                  </span>
-                </div>
+          <div className="mt-4 max-w-md mx-auto">
+            <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+              <div className="flex items-center justify-between mb-2 text-xs text-gray-400">
+                <span>α: {stats.alpha}</span>
+                <span className={`font-semibold ${
+                  Math.abs(stats.alpha - stats.omega) < 3 ? 'text-green-400' :
+                  Math.abs(stats.alpha - stats.omega) < 6 ? 'text-yellow-400' : 'text-red-400'
+                }`}>
+                  Баланс: {stats.total > 0 ? ((Math.min(stats.alpha, stats.omega) / Math.max(stats.alpha, stats.omega)) * 100).toFixed(0) : 0}%
+                </span>
+                <span>ω: {stats.omega}</span>
+              </div>
+              <div className="relative h-3 bg-white/10 rounded-full overflow-hidden">
+                {stats.total > 0 ? (
+                  <>
+                    <div 
+                      className="absolute left-0 top-0 h-full bg-gradient-to-r from-[#0EA5E9] to-[#0EA5E9]/80 transition-all duration-300"
+                      style={{ width: `${(stats.alpha / (stats.alpha + stats.omega)) * 100}%` }}
+                    />
+                    <div 
+                      className="absolute right-0 top-0 h-full bg-gradient-to-l from-[#8B5CF6] to-[#8B5CF6]/80 transition-all duration-300"
+                      style={{ width: `${(stats.omega / (stats.alpha + stats.omega)) * 100}%` }}
+                    />
+                    <div className="absolute left-1/2 top-0 w-0.5 h-full bg-white/50 -translate-x-1/2" />
+                  </>
+                ) : (
+                  <div className="absolute left-0 top-0 h-full w-full bg-white/5" />
+                )}
+              </div>
+              <div className="flex items-center justify-center mt-2 text-xs">
+                <span className={`${
+                  stats.total === 0 ? 'text-gray-400' :
+                  Math.abs(stats.alpha - stats.omega) < 3 ? 'text-green-400' :
+                  Math.abs(stats.alpha - stats.omega) < 6 ? 'text-yellow-400' : 'text-red-400'
+                }`}>
+                  {stats.total === 0 ? 'Нет данных для анализа баланса' :
+                   Math.abs(stats.alpha - stats.omega) < 3 ? '✓ Система сбалансирована' :
+                   Math.abs(stats.alpha - stats.omega) < 6 ? '⚠ Небольшой дисбаланс' : 
+                   `⚡ Дисбаланс: ${stats.alpha > stats.omega ? 'α' : 'ω'} доминирует`}
+                </span>
               </div>
             </div>
+          </div>
+        </div>
+
+        <div className="flex gap-3 justify-center flex-wrap">
+          <Button
+            onClick={isCapturing ? stopScreenCapture : startScreenCapture}
+            className={`${
+              isCapturing 
+                ? 'bg-red-500 hover:bg-red-600' 
+                : 'bg-gradient-to-r from-[#8B5CF6] to-[#0EA5E9] hover:opacity-90'
+            } text-lg px-8 py-6`}
+          >
+            <Icon name={isCapturing ? "StopCircle" : "Monitor"} size={24} className="mr-2" />
+            {isCapturing ? 'Остановить захват' : 'Начать захват экрана'}
+          </Button>
+
+          {isCapturing && (
+            <>
+              {!isRunning ? (
+                <Button
+                  onClick={handleStart}
+                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:opacity-90 text-white text-lg px-8 py-6"
+                  disabled={!captureArea}
+                >
+                  <Icon name="Play" size={24} className="mr-2" />
+                  Начать
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleStop}
+                  className="bg-gradient-to-r from-red-500 to-red-600 hover:opacity-90 text-white text-lg px-8 py-6"
+                >
+                  <Icon name="Square" size={24} className="mr-2" />
+                  Стоп
+                </Button>
+              )}
+
+              <Button
+                onClick={handlePauseResume}
+                variant="outline"
+                className="border-yellow-500 text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!isRunning}
+              >
+                <Icon name={isPaused ? "Play" : "Pause"} size={20} className="mr-2" />
+                {isPaused ? 'Возобновить' : 'Пауза'}
+              </Button>
+
+              <Button
+                onClick={handleReset}
+                variant="outline"
+                className="border-red-500 text-red-400 hover:bg-red-500/10"
+              >
+                <Icon name="RotateCcw" size={20} className="mr-2" />
+                Сброс
+              </Button>
+
+              {history.length > 0 && (
+                <Button
+                  onClick={exportToCSV}
+                  variant="outline"
+                  className="border-[#8B5CF6] text-[#8B5CF6] hover:bg-[#8B5CF6]/10"
+                >
+                  <Icon name="Download" size={20} className="mr-2" />
+                  Экспорт в CSV
+                </Button>
+              )}
+            </>
           )}
         </div>
+
+        {!isCapturing && (
+          <Card className="bg-blue-500/10 border-blue-500/30 p-4">
+            <div className="flex items-center gap-3">
+              <Icon name="Info" size={20} className="text-blue-400" />
+              <span className="text-blue-400 font-semibold">Шаг 1: Нажмите "Начать захват экрана" для активации системы распознавания</span>
+            </div>
+          </Card>
+        )}
+
+        {isCapturing && !captureArea && (
+          <Card className="bg-yellow-500/10 border-yellow-500/30 p-4">
+            <div className="flex items-center gap-3">
+              <Icon name="Target" size={20} className="text-yellow-400" />
+              <span className="text-yellow-400 font-semibold">Шаг 2: Выберите область на экране для отслеживания (нарисуйте прямоугольник мышью)</span>
+            </div>
+          </Card>
+        )}
+
+        {isCapturing && captureArea && !isRunning && (
+          <Card className="bg-green-500/10 border-green-500/30 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-green-400 font-semibold">Область выбрана! Шаг 3: Нажмите "Начать" для запуска распознавания цвета каждые 30 секунд</span>
+            </div>
+          </Card>
+        )}
+
+        {isCapturing && isRunning && !isPaused && (
+          <Card className="bg-green-500/10 border-green-500/30 p-4">
+            <div className="flex items-center gap-3">
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+              <span className="text-green-400 font-semibold">Система работает - распознавание цвета активно (каждые 30 секунд)</span>
+            </div>
+          </Card>
+        )}
+
+        {isPaused && (
+          <Card className="bg-yellow-500/10 border-yellow-500/30 p-4">
+            <div className="flex items-center gap-3">
+              <Icon name="Pause" size={20} className="text-yellow-400" />
+              <span className="text-yellow-400 font-semibold">Система на паузе - таймер остановлен</span>
+            </div>
+          </Card>
+        )}
+
+        {isCapturing && captureArea && !isRunning && history.length > 0 && (
+          <Card className="bg-orange-500/10 border-orange-500/30 p-4">
+            <div className="flex items-center gap-3">
+              <Icon name="AlertCircle" size={20} className="text-orange-400" />
+              <span className="text-orange-400 font-semibold">Система остановлена - нажмите "Начать" для продолжения</span>
+            </div>
+          </Card>
+        )}
+
+        {isCapturing && (
+          <Card className="bg-white/5 border-white/10 p-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold flex items-center gap-2">
+                  <Icon name="Video" size={20} className="text-[#8B5CF6]" />
+                  Превью захвата экрана
+                </h3>
+                {lastRecognizedText && (
+                  <Badge className="bg-[#0EA5E9]">
+                    Распознано: {lastRecognizedText}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-sm text-gray-400">
+                {isSelectingArea 
+                  ? 'Нарисуйте прямоугольник вокруг голубой (Альфа) или фиолетовой (Омега) области'
+                  : captureArea 
+                    ? 'Область выбрана (синий прямоугольник). Система определяет доминирующий цвет: голубой = Альфа, фиолетовый = Омега.'
+                    : 'Ожидание выбора области...'
+                }
+              </p>
+              <div className="space-y-2">
+                <canvas
+                  ref={previewCanvasRef}
+                  onMouseDown={handleCanvasMouseDown}
+                  onMouseMove={handleCanvasMouseMove}
+                  onMouseUp={handleCanvasMouseUp}
+                  className={`w-full border-2 ${
+                    isSelectingArea ? 'border-yellow-500 cursor-crosshair' : 'border-white/20'
+                  } rounded-lg`}
+                  width={640}
+                  height={360}
+                />
+                {captureArea && !isRunning && (
+                  <Button
+                    onClick={handleReselectArea}
+                    variant="outline"
+                    className="border-yellow-500 text-yellow-400 hover:bg-yellow-500/10 w-full"
+                  >
+                    <Icon name="RefreshCw" size={16} className="mr-2" />
+                    Изменить область захвата
+                  </Button>
+                )}
+              </div>
+            </div>
+          </Card>
+        )}
 
         <Card className="bg-gradient-to-br from-[#D946EF]/10 via-[#8B5CF6]/10 to-[#0EA5E9]/10 border-[#D946EF]/30 p-6">
           {prediction ? (
@@ -1341,176 +1517,6 @@ const Index = () => {
             </div>
           )}
         </Card>
-
-        <div className="flex gap-3 justify-center flex-wrap">
-          <Button
-            onClick={isCapturing ? stopScreenCapture : startScreenCapture}
-            className={`${
-              isCapturing 
-                ? 'bg-red-500 hover:bg-red-600' 
-                : 'bg-gradient-to-r from-[#8B5CF6] to-[#0EA5E9] hover:opacity-90'
-            } text-lg px-8 py-6`}
-          >
-            <Icon name={isCapturing ? "StopCircle" : "Monitor"} size={24} className="mr-2" />
-            {isCapturing ? 'Остановить захват' : 'Начать захват экрана'}
-          </Button>
-
-          {isCapturing && (
-            <>
-              {!isRunning ? (
-                <Button
-                  onClick={handleStart}
-                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:opacity-90 text-white text-lg px-8 py-6"
-                  disabled={!captureArea}
-                >
-                  <Icon name="Play" size={24} className="mr-2" />
-                  Начать
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleStop}
-                  className="bg-gradient-to-r from-red-500 to-red-600 hover:opacity-90 text-white text-lg px-8 py-6"
-                >
-                  <Icon name="Square" size={24} className="mr-2" />
-                  Стоп
-                </Button>
-              )}
-
-              <Button
-                onClick={handlePauseResume}
-                variant="outline"
-                className="border-yellow-500 text-yellow-400 hover:bg-yellow-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!isRunning}
-              >
-                <Icon name={isPaused ? "Play" : "Pause"} size={20} className="mr-2" />
-                {isPaused ? 'Возобновить' : 'Пауза'}
-              </Button>
-
-              <Button
-                onClick={handleReset}
-                variant="outline"
-                className="border-red-500 text-red-400 hover:bg-red-500/10"
-              >
-                <Icon name="RotateCcw" size={20} className="mr-2" />
-                Сброс
-              </Button>
-
-              {history.length > 0 && (
-                <Button
-                  onClick={exportToCSV}
-                  variant="outline"
-                  className="border-[#8B5CF6] text-[#8B5CF6] hover:bg-[#8B5CF6]/10"
-                >
-                  <Icon name="Download" size={20} className="mr-2" />
-                  Экспорт в CSV
-                </Button>
-              )}
-            </>
-          )}
-        </div>
-
-        {!isCapturing && (
-          <Card className="bg-blue-500/10 border-blue-500/30 p-4">
-            <div className="flex items-center gap-3">
-              <Icon name="Info" size={20} className="text-blue-400" />
-              <span className="text-blue-400 font-semibold">Шаг 1: Нажмите "Начать захват экрана" для активации системы распознавания</span>
-            </div>
-          </Card>
-        )}
-
-        {isCapturing && !captureArea && (
-          <Card className="bg-yellow-500/10 border-yellow-500/30 p-4">
-            <div className="flex items-center gap-3">
-              <Icon name="MousePointer2" size={20} className="text-yellow-400" />
-              <span className="text-yellow-400 font-semibold">Шаг 2: Выберите область на превью ниже - нарисуйте прямоугольник вокруг голубой или фиолетовой колонки</span>
-            </div>
-          </Card>
-        )}
-
-        {isCapturing && captureArea && !isRunning && (
-          <Card className="bg-green-500/10 border-green-500/30 p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-green-400 font-semibold">Область выбрана! Шаг 3: Нажмите "Начать" для запуска распознавания цвета каждые 30 секунд</span>
-            </div>
-          </Card>
-        )}
-
-        {isCapturing && isRunning && !isPaused && (
-          <Card className="bg-green-500/10 border-green-500/30 p-4">
-            <div className="flex items-center gap-3">
-              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-green-400 font-semibold">Система работает - распознавание цвета активно (каждые 30 секунд)</span>
-            </div>
-          </Card>
-        )}
-
-        {isPaused && (
-          <Card className="bg-yellow-500/10 border-yellow-500/30 p-4">
-            <div className="flex items-center gap-3">
-              <Icon name="Pause" size={20} className="text-yellow-400" />
-              <span className="text-yellow-400 font-semibold">Система на паузе - таймер остановлен</span>
-            </div>
-          </Card>
-        )}
-
-        {isCapturing && captureArea && !isRunning && history.length > 0 && (
-          <Card className="bg-orange-500/10 border-orange-500/30 p-4">
-            <div className="flex items-center gap-3">
-              <Icon name="AlertCircle" size={20} className="text-orange-400" />
-              <span className="text-orange-400 font-semibold">Система остановлена - нажмите "Начать" для продолжения</span>
-            </div>
-          </Card>
-        )}
-
-        {isCapturing && (
-          <Card className="bg-white/5 border-white/10 p-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold flex items-center gap-2">
-                  <Icon name="Video" size={20} className="text-[#8B5CF6]" />
-                  Превью захвата экрана
-                </h3>
-                {lastRecognizedText && (
-                  <Badge className="bg-[#0EA5E9]">
-                    Распознано: {lastRecognizedText}
-                  </Badge>
-                )}
-              </div>
-              <p className="text-sm text-gray-400">
-                {isSelectingArea 
-                  ? 'Нарисуйте прямоугольник вокруг голубой (Альфа) или фиолетовой (Омега) области'
-                  : captureArea 
-                    ? 'Область выбрана (синий прямоугольник). Система определяет доминирующий цвет: голубой = Альфа, фиолетовый = Омега.'
-                    : 'Ожидание выбора области...'
-                }
-              </p>
-              <div className="space-y-2">
-                <canvas
-                  ref={previewCanvasRef}
-                  onMouseDown={handleCanvasMouseDown}
-                  onMouseMove={handleCanvasMouseMove}
-                  onMouseUp={handleCanvasMouseUp}
-                  className={`w-full border-2 ${
-                    isSelectingArea ? 'border-yellow-500 cursor-crosshair' : 'border-white/20'
-                  } rounded-lg`}
-                  width={640}
-                  height={360}
-                />
-                {captureArea && !isRunning && (
-                  <Button
-                    onClick={handleReselectArea}
-                    variant="outline"
-                    className="border-yellow-500 text-yellow-400 hover:bg-yellow-500/10 w-full"
-                  >
-                    <Icon name="RefreshCw" size={16} className="mr-2" />
-                    Изменить область захвата
-                  </Button>
-                )}
-              </div>
-            </div>
-          </Card>
-        )}
 
         {lastPredictionResult && (
           <Card className={`${
