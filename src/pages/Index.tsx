@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { ScreenCaptureSection } from '@/components/ScreenCaptureSection';
 import { PredictionAnalytics } from '@/components/PredictionAnalytics';
-import { HistorySection, StatsSection } from '@/components/HistorySection';
+import { HistorySection } from '@/components/HistorySection';
 
 type Column = 'alpha' | 'omega';
 
@@ -204,9 +204,11 @@ const Index = () => {
           onEventDetected={(column) => addEvent(column, 'screen')}
         />
 
-        <PredictionAnalytics history={history} stats={stats} />
-
-        <StatsSection predictionHistory={predictionHistory} />
+        <PredictionAnalytics 
+          history={history} 
+          stats={stats} 
+          predictionHistory={predictionHistory}
+        />
 
         <HistorySection 
           history={history}
