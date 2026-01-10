@@ -296,13 +296,18 @@ export const PredictionAnalytics = ({ history, stats, predictionHistory }: Predi
     };
   };
 
+  const { topOverall: topSequences } = getAdaptiveAnalysis();
   const prediction = getAdaptivePrediction();
   const balanceAccuracy = calculateStrategyAccuracy('balance');
   const overallAccuracy = calculateStrategyAccuracy('overall');
 
   return (
     <>
-      <AdaptivePredictionCard prediction={prediction} predictionHistory={predictionHistory} />
+      <AdaptivePredictionCard 
+        prediction={prediction} 
+        predictionHistory={predictionHistory}
+        topSequences={topSequences}
+      />
       <SystemStatsCard predictionHistory={predictionHistory} />
       <StrategySelectionCard 
         historyLength={history.length}
