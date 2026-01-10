@@ -91,30 +91,30 @@ const Index = () => {
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const analyzeSequencePattern = (recHist: Column[]): AlgorithmPrediction => {
-    if (recHist.length < 5) {
+    if (recHist.length < 4) {
       return {
         name: 'Анализ последовательностей',
         prediction: 'alpha',
         confidence: 50,
         accuracy: 0,
-        description: 'Поиск похожих последовательностей из 5 событий в истории'
+        description: 'Поиск похожих последовательностей из 4 событий (5-е событие - прогноз)'
       };
     }
 
-    // Берем последние 5 событий как текущую последовательность
-    const last5 = recHist.slice(-5);
-    const currentPattern = last5.join('-');
+    // Берем последние 4 события как текущую последовательность
+    const last4 = recHist.slice(-4);
+    const currentPattern = last4.join('-');
     
     // Ищем все похожие последовательности в истории (до текущей)
     const matches: Column[] = [];
     
-    for (let i = 0; i <= recHist.length - 6; i++) {
-      const historicalPattern = recHist.slice(i, i + 5).join('-');
+    for (let i = 0; i <= recHist.length - 5; i++) {
+      const historicalPattern = recHist.slice(i, i + 4).join('-');
       
       // Если нашли такую же последовательность в прошлом
       if (historicalPattern === currentPattern) {
-        // Смотрим, что было после неё
-        const nextEvent = recHist[i + 5];
+        // Смотрим, что было после неё (5-е событие)
+        const nextEvent = recHist[i + 4];
         if (nextEvent) {
           matches.push(nextEvent);
         }
@@ -143,15 +143,15 @@ const Index = () => {
     let correctPredictions = 0;
     let totalPredictions = 0;
     
-    for (let i = 5; i < recHist.length; i++) {
-      const testPattern = recHist.slice(i - 5, i).join('-');
+    for (let i = 4; i < recHist.length; i++) {
+      const testPattern = recHist.slice(i - 4, i).join('-');
       const actualNext = recHist[i];
       
       // Ищем что было после такой последовательности раньше
       const historicalMatches: Column[] = [];
-      for (let j = 0; j < i - 5; j++) {
-        if (recHist.slice(j, j + 5).join('-') === testPattern) {
-          historicalMatches.push(recHist[j + 5]);
+      for (let j = 0; j < i - 4; j++) {
+        if (recHist.slice(j, j + 4).join('-') === testPattern) {
+          historicalMatches.push(recHist[j + 4]);
         }
       }
       
@@ -887,13 +887,13 @@ const Index = () => {
   const getAdaptiveAnalysis = () => {
     const allPatterns = [];
     
-    for (let len = 3; len <= 7; len++) {
+    for (let len = 4; len <= 6; len++) {
       const patterns = analyzeSequencesForLength(len);
       allPatterns.push(...patterns);
     }
     
     const bestByLength = new Map<number, typeof allPatterns[0][]>();
-    for (let len = 3; len <= 7; len++) {
+    for (let len = 4; len <= 6; len++) {
       const forLength = allPatterns
         .filter(p => p.length === len)
         .sort((a, b) => b.score - a.score)
@@ -913,7 +913,7 @@ const Index = () => {
   const getAdaptivePrediction = () => {
     const { topOverall } = getAdaptiveAnalysis();
     
-    for (let len = 7; len >= 3; len--) {
+    for (let len = 6; len >= 4; len--) {
       if (history.length < len) continue;
       
       const recent = history.slice(-len + 1).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
@@ -1023,7 +1023,7 @@ const Index = () => {
               <Badge className="bg-[#0EA5E9]/20 text-[#0EA5E9] border-none">
                 Найдено: {topSequences.length}
               </Badge>
-              <span className="text-gray-400 text-sm ml-2">(длина от 3 до 7 событий)</span>
+              <span className="text-gray-400 text-sm ml-2">(длина от 4 до 6 событий)</span>
             </div>
             
             <div className="space-y-3">
