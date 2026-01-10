@@ -830,30 +830,28 @@ const Index = () => {
 
   const sequenceTrends = getSequenceTrends();
 
-  const getTopSequences = () => {
-    if (history.length < 6) return [];
+  const analyzeSequencesForLength = (length: number) => {
+    if (history.length < length) return [];
     
     const sequences = new Map<string, { count: number; nextAlpha: number; nextOmega: number; fullSequence: string }>();
     
-    for (let i = 0; i < history.length - 5; i++) {
-      const first5 = [
-        history[i].column === 'alpha' ? 'α' : 'ω',
-        history[i + 1].column === 'alpha' ? 'α' : 'ω',
-        history[i + 2].column === 'alpha' ? 'α' : 'ω',
-        history[i + 3].column === 'alpha' ? 'α' : 'ω',
-        history[i + 4].column === 'alpha' ? 'α' : 'ω'
-      ].join('-');
+    for (let i = 0; i < history.length - length + 1; i++) {
+      const pattern = [];
+      for (let j = 0; j < length - 1; j++) {
+        pattern.push(history[i + j].column === 'alpha' ? 'α' : 'ω');
+      }
+      const patternStr = pattern.join('-');
       
-      const sixth = history[i + 5].column === 'alpha' ? 'α' : 'ω';
-      const fullSeq = first5 + '-' + sixth;
+      const nextEvent = history[i + length - 1].column === 'alpha' ? 'α' : 'ω';
+      const fullSeq = patternStr + '-' + nextEvent;
       
-      if (!sequences.has(first5)) {
-        sequences.set(first5, { count: 0, nextAlpha: 0, nextOmega: 0, fullSequence: '' });
+      if (!sequences.has(patternStr)) {
+        sequences.set(patternStr, { count: 0, nextAlpha: 0, nextOmega: 0, fullSequence: '' });
       }
       
-      const data = sequences.get(first5)!;
+      const data = sequences.get(patternStr)!;
       data.count++;
-      if (sixth === 'α') {
+      if (nextEvent === 'α') {
         data.nextAlpha++;
       } else {
         data.nextOmega++;
@@ -863,54 +861,86 @@ const Index = () => {
     
     return Array.from(sequences.entries())
       .filter(([_, data]) => data.count >= 2)
-      .map(([first5, data]) => {
+      .map(([pattern, data]) => {
         const alphaProb = (data.nextAlpha / data.count) * 100;
         const omegaProb = (data.nextOmega / data.count) * 100;
         const maxProb = Math.max(alphaProb, omegaProb);
         
         return {
-          first5: first5,
+          length,
+          pattern,
           fullSequence: data.fullSequence,
           count: data.count,
           nextAlpha: data.nextAlpha,
           nextOmega: data.nextOmega,
           prediction: alphaProb > omegaProb ? 'alpha' : 'omega',
-          sixthEvent: alphaProb > omegaProb ? 'α' : 'ω',
+          nextEvent: alphaProb > omegaProb ? 'α' : 'ω',
           confidence: maxProb,
           alphaProb,
-          omegaProb
+          omegaProb,
+          score: data.count * maxProb
         };
       })
-      .filter(item => item.confidence >= 60)
-      .sort((a, b) => b.count - a.count)
+      .filter(item => item.confidence >= 60);
+  };
+
+  const getAdaptiveAnalysis = () => {
+    const allPatterns = [];
+    
+    for (let len = 3; len <= 7; len++) {
+      const patterns = analyzeSequencesForLength(len);
+      allPatterns.push(...patterns);
+    }
+    
+    const bestByLength = new Map<number, typeof allPatterns[0][]>();
+    for (let len = 3; len <= 7; len++) {
+      const forLength = allPatterns
+        .filter(p => p.length === len)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5);
+      if (forLength.length > 0) {
+        bestByLength.set(len, forLength);
+      }
+    }
+    
+    const topOverall = allPatterns
+      .sort((a, b) => b.score - a.score)
       .slice(0, 5);
+    
+    return { bestByLength, topOverall };
   };
 
-  const getPrediction = () => {
-    if (history.length < 5) return null;
+  const getAdaptivePrediction = () => {
+    const { topOverall } = getAdaptiveAnalysis();
     
-    const lastFive = history.slice(-5).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
-    const topSequences = getTopSequences();
+    for (let len = 7; len >= 3; len--) {
+      if (history.length < len) continue;
+      
+      const recent = history.slice(-len + 1).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
+      
+      const match = topOverall.find(p => p.length === len && p.pattern === recent);
+      
+      if (match && match.confidence >= 70) {
+        return {
+          pattern: match.pattern,
+          fullSequence: match.fullSequence,
+          nextEvent: match.nextEvent,
+          prediction: match.prediction,
+          confidence: match.confidence,
+          alphaProb: match.alphaProb,
+          omegaProb: match.omegaProb,
+          occurrences: match.count,
+          length: match.length,
+          score: match.score
+        };
+      }
+    }
     
-    const match = topSequences.find(s => s.first5 === lastFive);
-    
-    if (!match) return null;
-    
-    return {
-      first5: match.first5,
-      fullSequence: match.fullSequence,
-      sixthEvent: match.sixthEvent,
-      prediction: match.prediction,
-      confidence: match.confidence,
-      alphaProb: match.alphaProb,
-      omegaProb: match.omegaProb,
-      occurrences: match.count,
-      rank: topSequences.indexOf(match) + 1
-    };
+    return null;
   };
 
-  const topSequences = getTopSequences();
-  const prediction = getPrediction();
+  const { topOverall: topSequences } = getAdaptiveAnalysis();
+  const prediction = getAdaptivePrediction();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#1A1F2C] via-[#221F26] to-[#1A1F2C] text-white p-6">
@@ -925,15 +955,75 @@ const Index = () => {
           <p className="text-gray-400">Система аналитического прогнозирования с распознаванием текста</p>
         </div>
 
+        {prediction && (
+          <Card className="bg-gradient-to-br from-[#D946EF]/10 via-[#8B5CF6]/10 to-[#0EA5E9]/10 border-[#D946EF]/30 p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="bg-gradient-to-br from-[#D946EF] to-[#8B5CF6] p-4 rounded-xl">
+                  <Icon name="Sparkles" size={32} className="text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold mb-1">Адаптивный прогноз</h2>
+                  <p className="text-gray-400 text-sm">
+                    Оптимальная длина: {prediction.length} событий (точность {prediction.confidence.toFixed(0)}%)
+                  </p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-6">
+                <div className={`px-8 py-4 rounded-xl border-2 ${
+                  prediction.prediction === 'alpha'
+                    ? 'bg-[#0EA5E9]/20 border-[#0EA5E9]'
+                    : 'bg-[#8B5CF6]/20 border-[#8B5CF6]'
+                }`}>
+                  <div className="text-sm text-gray-400 mb-1 text-center">Следующее событие</div>
+                  <div className={`text-5xl font-bold ${
+                    prediction.prediction === 'alpha' ? 'text-[#0EA5E9]' : 'text-[#8B5CF6]'
+                  }`}>
+                    {prediction.nextEvent}
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-4 pt-4 border-t border-white/10">
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400">Паттерн ({prediction.length - 1} → 1):</span>
+                  <div className="flex gap-1">
+                    {prediction.fullSequence.split('-').map((s, i) => (
+                      <Badge key={i} className={`${
+                        s === 'α' ? 'bg-[#0EA5E9] text-white' : 'bg-[#8B5CF6] text-white'
+                      } border-none ${i === prediction.length - 1 ? 'ring-2 ring-[#D946EF]' : ''}`}>{s}</Badge>
+                    ))}
+                  </div>
+                </div>
+                
+                <div className="flex gap-6">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded bg-[#0EA5E9]" />
+                    <span className="text-gray-400">α: {prediction.alphaProb.toFixed(1)}%</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded bg-[#8B5CF6]" />
+                    <span className="text-gray-400">ω: {prediction.omegaProb.toFixed(1)}%</span>
+                  </div>
+                  <span className="text-gray-400">Встречался: {prediction.occurrences} раз</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+        )}
+
         {topSequences.length > 0 && (
           <Card className="bg-white/5 border-white/10 p-6">
             <div className="flex items-center gap-3 mb-4">
               <Icon name="Database" size={24} className="text-[#0EA5E9]" />
-              <h3 className="text-xl font-bold">Топ-5 частых последовательностей</h3>
+              <h3 className="text-xl font-bold">Топ-5 паттернов (адаптивный анализ)</h3>
               <Badge className="bg-[#0EA5E9]/20 text-[#0EA5E9] border-none">
-                Всего паттернов: {topSequences.length}
+                Найдено: {topSequences.length}
               </Badge>
-              <span className="text-gray-400 text-sm ml-2">(5 событий → прогноз 6-го)</span>
+              <span className="text-gray-400 text-sm ml-2">(длина от 3 до 7 событий)</span>
             </div>
             
             <div className="space-y-3">
@@ -941,7 +1031,7 @@ const Index = () => {
                 <div 
                   key={idx}
                   className={`bg-white/5 rounded-lg p-4 border ${
-                    prediction && seq.first5 === prediction.first5
+                    prediction && seq.pattern === prediction.pattern
                       ? 'border-[#D946EF] bg-[#D946EF]/10'
                       : 'border-white/10'
                   }`}
@@ -952,6 +1042,10 @@ const Index = () => {
                         #{idx + 1}
                       </Badge>
                       
+                      <Badge className="bg-[#D946EF]/20 text-[#D946EF] border-none text-xs">
+                        Длина: {seq.length}
+                      </Badge>
+                      
                       <div className="flex items-center gap-2">
                         {seq.fullSequence.split('-').map((symbol, i) => (
                           <Badge 
@@ -960,7 +1054,7 @@ const Index = () => {
                               symbol === 'α' 
                                 ? 'bg-[#0EA5E9] text-white' 
                                 : 'bg-[#8B5CF6] text-white'
-                            } border-none text-sm font-bold ${i === 5 ? 'ring-2 ring-[#D946EF]' : ''}`}
+                            } border-none text-sm font-bold ${i === seq.length - 1 ? 'ring-2 ring-[#D946EF]' : ''}`}
                           >
                             {symbol}
                           </Badge>
@@ -973,6 +1067,9 @@ const Index = () => {
                         </div>
                         <div className="text-gray-400">
                           Точность: <span className="text-white font-semibold">{seq.confidence.toFixed(0)}%</span>
+                        </div>
+                        <div className="text-gray-400">
+                          Рейтинг: <span className="text-white font-semibold">{seq.score.toFixed(0)}</span>
                         </div>
                       </div>
                     </div>
@@ -989,12 +1086,12 @@ const Index = () => {
                     </div>
                   </div>
                   
-                  {prediction && seq.first5 === prediction.first5 && (
+                  {prediction && seq.pattern === prediction.pattern && (
                     <div className="mt-3 pt-3 border-t border-[#D946EF]/30">
                       <div className="flex items-center gap-2">
                         <Icon name="Sparkles" size={16} className="text-[#D946EF]" />
                         <span className="text-[#D946EF] font-semibold text-sm">
-                          Такая последовательность уже была! Шестое событие с вероятностью {seq.confidence.toFixed(0)}%: {seq.prediction === 'alpha' ? 'Альфа' : 'Омега'}
+                          🎯 Система выбрала этот паттерн для прогноза! Следующее событие с вероятностью {seq.confidence.toFixed(0)}%: {seq.prediction === 'alpha' ? 'Альфа' : 'Омега'}
                         </span>
                       </div>
                     </div>
