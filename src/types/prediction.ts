@@ -38,12 +38,6 @@ export interface PredictionHistory {
   actual: Column;
   isCorrect: boolean;
   confidence: number;
-  adaptivePrediction: Column;
-  adaptiveConfidence: number;
-  adaptiveIsCorrect: boolean;
-  sequencePrediction: Column;
-  sequenceConfidence: number;
-  sequenceIsCorrect: boolean;
 }
 
 export interface MethodPredictionHistory {
