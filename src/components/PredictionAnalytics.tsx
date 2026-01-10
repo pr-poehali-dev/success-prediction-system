@@ -194,11 +194,6 @@ export const PredictionAnalytics = ({ history, stats, predictionHistory }: Predi
     
     const recent4 = history.slice(-4).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
     
-    const overallAccuracy = calculateStrategyAccuracy('overall');
-    const balanceAccuracy = calculateStrategyAccuracy('balance');
-    
-    const bestStrategy = balanceAccuracy >= overallAccuracy ? 'balance' : 'overall';
-    
     const matches: { event: Column, pos: number }[] = [];
     for (let j = 0; j < history.length - 4; j++) {
       const histPattern = history.slice(j, j + 4).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
@@ -214,51 +209,74 @@ export const PredictionAnalytics = ({ history, stats, predictionHistory }: Predi
     const imbalance = currentAlpha - currentOmega;
     const totalEvents = history.length;
     
+    const alphaC = matches.filter(m => m.event === 'alpha').length;
+    const omegaC = matches.filter(m => m.event === 'omega').length;
+    const patternPrediction: Column = alphaC >= omegaC ? 'alpha' : 'omega';
+    const balancePrediction: Column = imbalance > 0 ? 'omega' : 'alpha';
+    
+    const patternStrength = Math.abs(alphaC - omegaC) / matches.length;
+    const imbalanceRatio = Math.abs(imbalance) / totalEvents;
+    
+    const overallAccuracy = calculateStrategyAccuracy('overall', 20);
+    const balanceAccuracy = calculateStrategyAccuracy('balance', 20);
+    
+    const accuracyDiff = balanceAccuracy - overallAccuracy;
+    let adaptiveBalanceWeight = 0.5;
+    
+    if (Math.abs(imbalance) >= 2) {
+      const baseBalanceWeight = Math.min(0.8, imbalanceRatio * 3);
+      
+      if (accuracyDiff > 10) {
+        adaptiveBalanceWeight = Math.min(0.85, baseBalanceWeight + 0.2);
+      } else if (accuracyDiff > 5) {
+        adaptiveBalanceWeight = Math.min(0.75, baseBalanceWeight + 0.1);
+      } else if (accuracyDiff < -10) {
+        adaptiveBalanceWeight = Math.max(0.15, baseBalanceWeight - 0.2);
+      } else if (accuracyDiff < -5) {
+        adaptiveBalanceWeight = Math.max(0.25, baseBalanceWeight - 0.1);
+      } else {
+        adaptiveBalanceWeight = baseBalanceWeight;
+      }
+      
+      if (patternStrength > 0.7) {
+        adaptiveBalanceWeight *= 0.7;
+      }
+    } else {
+      adaptiveBalanceWeight = 0.2;
+    }
+    
+    const patternWeight = 1 - adaptiveBalanceWeight;
+    
     let prediction: Column;
     let confidence: number;
     let strategyName: string;
     
-    if (bestStrategy === 'balance') {
-      const alphaC = matches.filter(m => m.event === 'alpha').length;
-      const omegaC = matches.filter(m => m.event === 'omega').length;
-      const patternPrediction: Column = alphaC >= omegaC ? 'alpha' : 'omega';
-      
-      if (Math.abs(imbalance) >= 3) {
-        const balancePrediction: Column = imbalance > 0 ? 'omega' : 'alpha';
-        const balanceWeight = Math.min(0.7, Math.abs(imbalance) / totalEvents * 2);
-        const patternWeight = 1 - balanceWeight;
-        
-        if (balancePrediction === patternPrediction) {
-          prediction = patternPrediction;
-          const dominant = Math.max(alphaC, omegaC);
-          confidence = Math.min(95, 65 + (dominant / matches.length) * 30 + balanceWeight * 15);
-        } else {
-          prediction = balanceWeight > 0.5 ? balancePrediction : patternPrediction;
-          const baseConfidence = balanceWeight > 0.5 ? 60 : 55;
-          confidence = Math.min(90, baseConfidence + Math.abs(imbalance) * 3);
-        }
-        strategyName = `⚖️ Баланс (дисбаланс: ${imbalance > 0 ? '+' : ''}${imbalance})`;
+    if (balancePrediction === patternPrediction) {
+      prediction = patternPrediction;
+      const dominant = Math.max(alphaC, omegaC);
+      const baseConf = 60 + (dominant / matches.length) * 25;
+      const balanceBonus = adaptiveBalanceWeight * 20;
+      confidence = Math.min(95, baseConf + balanceBonus);
+      strategyName = `🎯⚖️ Синергия (вес баланса: ${(adaptiveBalanceWeight * 100).toFixed(0)}%)`;
+    } else {
+      if (adaptiveBalanceWeight > patternWeight) {
+        prediction = balancePrediction;
+        confidence = Math.min(90, 55 + adaptiveBalanceWeight * 30 + Math.abs(imbalance) * 2);
+        strategyName = `⚖️ Баланс (вес: ${(adaptiveBalanceWeight * 100).toFixed(0)}%, дисб: ${imbalance > 0 ? '+' : ''}${imbalance})`;
       } else {
         prediction = patternPrediction;
         const dominant = Math.max(alphaC, omegaC);
-        confidence = Math.min(95, 60 + (dominant / matches.length) * 35);
-        strategyName = '⚖️ Баланс (паттерн)';
+        confidence = Math.min(90, 55 + (dominant / matches.length) * 30 + patternStrength * 15);
+        strategyName = `🎯 Паттерн (вес: ${(patternWeight * 100).toFixed(0)}%, сила: ${(patternStrength * 100).toFixed(0)}%)`;
       }
-    } else {
-      const alphaC = matches.filter(m => m.event === 'alpha').length;
-      const omegaC = matches.filter(m => m.event === 'omega').length;
-      prediction = alphaC >= omegaC ? 'alpha' : 'omega';
-      const dominant = Math.max(alphaC, omegaC);
-      confidence = Math.min(95, 55 + (dominant / matches.length) * 40);
-      strategyName = '🎯 Паттерн';
     }
     
-    if (confidence < 60) return null;
+    if (confidence < 55) return null;
     
-    const alphaCount = matches.filter(m => m.event === 'alpha').length;
-    const omegaCount = matches.filter(m => m.event === 'omega').length;
-    const alphaProb = (alphaCount / matches.length) * 100;
-    const omegaProb = (omegaCount / matches.length) * 100;
+    const alphaProb = (alphaC / matches.length) * 100;
+    const omegaProb = (omegaC / matches.length) * 100;
+    
+    const bestAccuracy = Math.max(overallAccuracy, balanceAccuracy);
     
     return {
       pattern: recent4,
@@ -272,7 +290,7 @@ export const PredictionAnalytics = ({ history, stats, predictionHistory }: Predi
       length: 5,
       score: matches.length * confidence,
       strategyName,
-      strategyAccuracy: bestStrategy === 'balance' ? balanceAccuracy : overallAccuracy,
+      strategyAccuracy: bestAccuracy,
       imbalance,
       balanceInfo: `α:${currentAlpha} ω:${currentOmega}`
     };
