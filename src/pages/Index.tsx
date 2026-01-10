@@ -917,7 +917,7 @@ const Index = () => {
     return { bestByLength: new Map(), topOverall };
   };
 
-  const calculateStrategyAccuracy = (strategy: 'recent' | 'overall' | 'weighted', windowSize: number = 10) => {
+  const calculateStrategyAccuracy = (strategy: 'recent' | 'overall' | 'weighted' | 'balance', windowSize: number = 10) => {
     if (history.length < 5) return 0;
     
     let correct = 0;
@@ -940,7 +940,29 @@ const Index = () => {
       
       let predicted: Column;
       
-      if (strategy === 'recent') {
+      if (strategy === 'balance') {
+        const currentAlpha = history.slice(0, i).filter(e => e.column === 'alpha').length;
+        const currentOmega = history.slice(0, i).filter(e => e.column === 'omega').length;
+        const imbalance = currentAlpha - currentOmega;
+        
+        const alphaC = matches.filter(m => m.event === 'alpha').length;
+        const omegaC = matches.filter(m => m.event === 'omega').length;
+        const patternPrediction: Column = alphaC >= omegaC ? 'alpha' : 'omega';
+        
+        if (Math.abs(imbalance) >= 3) {
+          const balancePrediction: Column = imbalance > 0 ? 'omega' : 'alpha';
+          const balanceWeight = Math.min(0.7, Math.abs(imbalance) / 10);
+          const patternWeight = 1 - balanceWeight;
+          
+          if (balancePrediction === patternPrediction) {
+            predicted = patternPrediction;
+          } else {
+            predicted = balanceWeight > patternWeight ? balancePrediction : patternPrediction;
+          }
+        } else {
+          predicted = patternPrediction;
+        }
+      } else if (strategy === 'recent') {
         const recent = matches.slice(-Math.min(3, matches.length));
         const alphaC = recent.filter(m => m.event === 'alpha').length;
         const omegaC = recent.filter(m => m.event === 'omega').length;
@@ -976,8 +998,10 @@ const Index = () => {
     const recentAccuracy = calculateStrategyAccuracy('recent');
     const overallAccuracy = calculateStrategyAccuracy('overall');
     const weightedAccuracy = calculateStrategyAccuracy('weighted');
+    const balanceAccuracy = calculateStrategyAccuracy('balance');
     
     const bestStrategy = 
+      balanceAccuracy >= weightedAccuracy && balanceAccuracy >= recentAccuracy && balanceAccuracy >= overallAccuracy ? 'balance' :
       weightedAccuracy >= recentAccuracy && weightedAccuracy >= overallAccuracy ? 'weighted' :
       recentAccuracy >= overallAccuracy ? 'recent' : 'overall';
     
@@ -991,11 +1015,42 @@ const Index = () => {
     
     if (matches.length === 0) return null;
     
+    const currentAlpha = history.filter(e => e.column === 'alpha').length;
+    const currentOmega = history.filter(e => e.column === 'omega').length;
+    const imbalance = currentAlpha - currentOmega;
+    const totalEvents = history.length;
+    
     let prediction: Column;
     let confidence: number;
     let strategyName: string;
     
-    if (bestStrategy === 'recent') {
+    if (bestStrategy === 'balance') {
+      const alphaC = matches.filter(m => m.event === 'alpha').length;
+      const omegaC = matches.filter(m => m.event === 'omega').length;
+      const patternPrediction: Column = alphaC >= omegaC ? 'alpha' : 'omega';
+      
+      if (Math.abs(imbalance) >= 3) {
+        const balancePrediction: Column = imbalance > 0 ? 'omega' : 'alpha';
+        const balanceWeight = Math.min(0.7, Math.abs(imbalance) / totalEvents * 2);
+        const patternWeight = 1 - balanceWeight;
+        
+        if (balancePrediction === patternPrediction) {
+          prediction = patternPrediction;
+          const dominant = Math.max(alphaC, omegaC);
+          confidence = Math.min(95, 65 + (dominant / matches.length) * 30 + balanceWeight * 15);
+        } else {
+          prediction = balanceWeight > 0.5 ? balancePrediction : patternPrediction;
+          const baseConfidence = balanceWeight > 0.5 ? 60 : 55;
+          confidence = Math.min(90, baseConfidence + Math.abs(imbalance) * 3);
+        }
+        strategyName = `⚖️ Баланс (дисбаланс: ${imbalance > 0 ? '+' : ''}${imbalance})`;
+      } else {
+        prediction = patternPrediction;
+        const dominant = Math.max(alphaC, omegaC);
+        confidence = Math.min(95, 60 + (dominant / matches.length) * 35);
+        strategyName = '⚖️ Баланс (паттерн)';
+      }
+    } else if (bestStrategy === 'recent') {
       const recent = matches.slice(-Math.min(3, matches.length));
       const alphaC = recent.filter(m => m.event === 'alpha').length;
       const omegaC = recent.filter(m => m.event === 'omega').length;
@@ -1022,7 +1077,7 @@ const Index = () => {
       const totalWeight = matches.reduce((sum, _, idx) => sum + Math.pow(1.5, idx), 0);
       const dominantScore = Math.max(alphaScore, omegaScore);
       confidence = Math.min(95, 58 + (dominantScore / totalWeight) * 37);
-      strategyName = '⚖️ Взвешенный анализ';
+      strategyName = '🔄 Взвешенный анализ';
     }
     
     if (confidence < 60) return null;
@@ -1044,8 +1099,11 @@ const Index = () => {
       length: 5,
       score: matches.length * confidence,
       strategyName,
-      strategyAccuracy: bestStrategy === 'recent' ? recentAccuracy : 
-                        bestStrategy === 'overall' ? overallAccuracy : weightedAccuracy
+      strategyAccuracy: bestStrategy === 'balance' ? balanceAccuracy :
+                        bestStrategy === 'recent' ? recentAccuracy : 
+                        bestStrategy === 'overall' ? overallAccuracy : weightedAccuracy,
+      imbalance,
+      balanceInfo: `α:${currentAlpha} ω:${currentOmega}`
     };
   };
 
@@ -1064,6 +1122,44 @@ const Index = () => {
           </h1>
           <p className="text-gray-400">Адаптивная система прогнозирования с машинным обучением</p>
           <p className="text-sm text-gray-500">Анализ паттернов из 5 событий • Автоматический выбор стратегии • Самообучение</p>
+          
+          {history.length > 0 && (
+            <div className="mt-4 max-w-md mx-auto">
+              <div className="bg-white/5 rounded-lg p-3 border border-white/10">
+                <div className="flex items-center justify-between mb-2 text-xs text-gray-400">
+                  <span>α: {stats.alpha}</span>
+                  <span className={`font-semibold ${
+                    Math.abs(stats.alpha - stats.omega) < 3 ? 'text-green-400' :
+                    Math.abs(stats.alpha - stats.omega) < 6 ? 'text-yellow-400' : 'text-red-400'
+                  }`}>
+                    Баланс: {((Math.min(stats.alpha, stats.omega) / Math.max(stats.alpha, stats.omega)) * 100).toFixed(0)}%
+                  </span>
+                  <span>ω: {stats.omega}</span>
+                </div>
+                <div className="relative h-3 bg-white/10 rounded-full overflow-hidden">
+                  <div 
+                    className="absolute left-0 top-0 h-full bg-gradient-to-r from-[#0EA5E9] to-[#0EA5E9]/80 transition-all duration-300"
+                    style={{ width: `${(stats.alpha / (stats.alpha + stats.omega)) * 100}%` }}
+                  />
+                  <div 
+                    className="absolute right-0 top-0 h-full bg-gradient-to-l from-[#8B5CF6] to-[#8B5CF6]/80 transition-all duration-300"
+                    style={{ width: `${(stats.omega / (stats.alpha + stats.omega)) * 100}%` }}
+                  />
+                  <div className="absolute left-1/2 top-0 w-0.5 h-full bg-white/50 -translate-x-1/2" />
+                </div>
+                <div className="flex items-center justify-center mt-2 text-xs">
+                  <span className={`${
+                    Math.abs(stats.alpha - stats.omega) < 3 ? 'text-green-400' :
+                    Math.abs(stats.alpha - stats.omega) < 6 ? 'text-yellow-400' : 'text-red-400'
+                  }`}>
+                    {Math.abs(stats.alpha - stats.omega) < 3 ? '✓ Система сбалансирована' :
+                     Math.abs(stats.alpha - stats.omega) < 6 ? '⚠ Небольшой дисбаланс' : 
+                     `⚡ Дисбаланс: ${stats.alpha > stats.omega ? 'α' : 'ω'} доминирует`}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {prediction && (
@@ -1077,6 +1173,9 @@ const Index = () => {
                   <h2 className="text-2xl font-bold mb-1">Адаптивный прогноз</h2>
                   <p className="text-gray-400 text-sm">
                     Стратегия: {prediction.strategyName} • Точность: {prediction.strategyAccuracy.toFixed(1)}%
+                  </p>
+                  <p className="text-gray-500 text-xs mt-1">
+                    Текущий баланс: {prediction.balanceInfo} • Дисбаланс: {prediction.imbalance > 0 ? '+' : ''}{prediction.imbalance}
                   </p>
                 </div>
               </div>
@@ -1220,13 +1319,27 @@ const Index = () => {
               <h3 className="text-xl font-bold">Адаптивный выбор стратегии</h3>
             </div>
             
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
+              <div className="bg-white/5 rounded-lg p-4 border border-white/10">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-lg">⚖️</span>
+                  <span className="font-semibold text-sm">Баланс 50/50</span>
+                </div>
+                <p className="text-xs text-gray-400 mb-2">Стремление к равновесию</p>
+                <div className="flex items-center gap-2">
+                  <Progress value={calculateStrategyAccuracy('balance')} className="flex-1 h-2" />
+                  <span className="text-sm font-semibold text-[#0EA5E9]">
+                    {calculateStrategyAccuracy('balance').toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+
               <div className="bg-white/5 rounded-lg p-4 border border-white/10">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-lg">🔥</span>
-                  <span className="font-semibold">Свежие данные</span>
+                  <span className="font-semibold text-sm">Свежие данные</span>
                 </div>
-                <p className="text-sm text-gray-400 mb-2">Приоритет последним 3 совпадениям</p>
+                <p className="text-xs text-gray-400 mb-2">Последние 3 совпадения</p>
                 <div className="flex items-center gap-2">
                   <Progress value={calculateStrategyAccuracy('recent')} className="flex-1 h-2" />
                   <span className="text-sm font-semibold text-[#0EA5E9]">
@@ -1237,10 +1350,10 @@ const Index = () => {
 
               <div className="bg-white/5 rounded-lg p-4 border border-white/10">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">⚖️</span>
-                  <span className="font-semibold">Взвешенный анализ</span>
+                  <span className="text-lg">🔄</span>
+                  <span className="font-semibold text-sm">Взвешенный</span>
                 </div>
-                <p className="text-sm text-gray-400 mb-2">Экспоненциальные веса по времени</p>
+                <p className="text-xs text-gray-400 mb-2">Веса по времени</p>
                 <div className="flex items-center gap-2">
                   <Progress value={calculateStrategyAccuracy('weighted')} className="flex-1 h-2" />
                   <span className="text-sm font-semibold text-[#0EA5E9]">
@@ -1252,9 +1365,9 @@ const Index = () => {
               <div className="bg-white/5 rounded-lg p-4 border border-white/10">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-lg">📊</span>
-                  <span className="font-semibold">Общая статистика</span>
+                  <span className="font-semibold text-sm">Общая стат.</span>
                 </div>
-                <p className="text-sm text-gray-400 mb-2">Все совпадения равноценны</p>
+                <p className="text-xs text-gray-400 mb-2">Все равноценны</p>
                 <div className="flex items-center gap-2">
                   <Progress value={calculateStrategyAccuracy('overall')} className="flex-1 h-2" />
                   <span className="text-sm font-semibold text-[#0EA5E9]">
@@ -1267,7 +1380,7 @@ const Index = () => {
             <div className="mt-4 p-3 bg-[#D946EF]/10 border border-[#D946EF]/30 rounded-lg">
               <p className="text-sm text-gray-300">
                 <Icon name="Info" size={16} className="inline mr-2 text-[#D946EF]" />
-                Система автоматически выбирает стратегию с наилучшей точностью на последних 10 событиях
+                Система автоматически выбирает стратегию с наилучшей точностью. <strong>Стратегия Баланс</strong> учитывает стремление к равновесию 50/50 между α и ω.
               </p>
             </div>
           </Card>
