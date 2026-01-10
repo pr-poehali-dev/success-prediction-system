@@ -91,65 +91,83 @@ const Index = () => {
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const analyzeSequencePattern = (recHist: Column[]): AlgorithmPrediction => {
-    if (recHist.length < 4) {
+    if (recHist.length < 5) {
       return {
-        name: 'Анализ последовательностей',
+        name: 'Анализ последовательностей из 5 событий',
         prediction: 'alpha',
         confidence: 50,
         accuracy: 0,
-        description: 'Поиск похожих последовательностей из 4 событий (5-е событие - прогноз)'
+        description: 'Анализ паттернов: 4 события + 5-е событие (прогноз)'
       };
     }
 
-    // Берем последние 4 события как текущую последовательность
+    // Берем последние 4 события для поиска паттерна
     const last4 = recHist.slice(-4);
     const currentPattern = last4.join('-');
     
-    // Ищем все похожие последовательности в истории (до текущей)
-    const matches: Column[] = [];
+    // Ищем все последовательности из 5 событий (4 + 5-е) в истории
+    const matches: { sequence: Column[], fifthEvent: Column, timestamp: number }[] = [];
     
     for (let i = 0; i <= recHist.length - 5; i++) {
       const historicalPattern = recHist.slice(i, i + 4).join('-');
       
-      // Если нашли такую же последовательность в прошлом
+      // Если первые 4 события совпадают с текущим паттерном
       if (historicalPattern === currentPattern) {
-        // Смотрим, что было после неё (5-е событие)
-        const nextEvent = recHist[i + 4];
-        if (nextEvent) {
-          matches.push(nextEvent);
-        }
+        const fifthEvent = recHist[i + 4];
+        matches.push({
+          sequence: recHist.slice(i, i + 5),
+          fifthEvent: fifthEvent,
+          timestamp: i
+        });
       }
     }
 
-    // Подсчитываем, что чаще было после такой последовательности
-    const alphaCount = matches.filter(c => c === 'alpha').length;
-    const omegaCount = matches.filter(c => c === 'omega').length;
+    // Подсчитываем, что чаще было 5-м событием в таких последовательностях
+    const alphaCount = matches.filter(m => m.fifthEvent === 'alpha').length;
+    const omegaCount = matches.filter(m => m.fifthEvent === 'omega').length;
     
     let prediction: Column;
     let confidence: number;
     
     if (matches.length === 0) {
-      // Такой последовательности еще не было - предсказываем с минимальной уверенностью
       prediction = 'alpha';
       confidence = 50;
     } else {
-      // Предсказываем то, что чаще было после такой последовательности
-      prediction = alphaCount >= omegaCount ? 'alpha' : 'omega';
-      const dominantCount = Math.max(alphaCount, omegaCount);
-      confidence = Math.min(95, 50 + (dominantCount / matches.length) * 45);
+      // Приоритет более свежим событиям
+      let recentAlpha = 0;
+      let recentOmega = 0;
+      const recentCount = Math.min(3, matches.length);
+      
+      for (let i = matches.length - recentCount; i < matches.length; i++) {
+        if (matches[i].fifthEvent === 'alpha') recentAlpha++;
+        else recentOmega++;
+      }
+      
+      // Если последние совпадения единогласны - высокая уверенность
+      if (recentAlpha > 0 && recentOmega === 0) {
+        prediction = 'alpha';
+        confidence = Math.min(95, 65 + recentAlpha * 10);
+      } else if (recentOmega > 0 && recentAlpha === 0) {
+        prediction = 'omega';
+        confidence = Math.min(95, 65 + recentOmega * 10);
+      } else {
+        // Используем общую статистику
+        prediction = alphaCount >= omegaCount ? 'alpha' : 'omega';
+        const dominantCount = Math.max(alphaCount, omegaCount);
+        confidence = Math.min(90, 50 + (dominantCount / matches.length) * 40);
+      }
     }
     
     // Рассчитываем точность метода на всей истории
     let correctPredictions = 0;
     let totalPredictions = 0;
     
-    for (let i = 4; i < recHist.length; i++) {
-      const testPattern = recHist.slice(i - 4, i).join('-');
-      const actualNext = recHist[i];
+    for (let i = 5; i < recHist.length; i++) {
+      const testPattern = recHist.slice(i - 5, i - 1).join('-');
+      const actualFifth = recHist[i - 1];
       
-      // Ищем что было после такой последовательности раньше
       const historicalMatches: Column[] = [];
-      for (let j = 0; j < i - 4; j++) {
+      for (let j = 0; j < i - 5; j++) {
         if (recHist.slice(j, j + 4).join('-') === testPattern) {
           historicalMatches.push(recHist[j + 4]);
         }
@@ -158,9 +176,9 @@ const Index = () => {
       if (historicalMatches.length > 0) {
         const alphaC = historicalMatches.filter(c => c === 'alpha').length;
         const omegaC = historicalMatches.filter(c => c === 'omega').length;
-        const predictedNext: Column = alphaC >= omegaC ? 'alpha' : 'omega';
+        const predictedFifth: Column = alphaC >= omegaC ? 'alpha' : 'omega';
         
-        if (predictedNext === actualNext) {
+        if (predictedFifth === actualFifth) {
           correctPredictions++;
         }
         totalPredictions++;
@@ -170,11 +188,11 @@ const Index = () => {
     const accuracy = totalPredictions > 0 ? (correctPredictions / totalPredictions) * 100 : 0;
 
     return {
-      name: 'Анализ последовательностей',
+      name: 'Анализ последовательностей из 5 событий',
       prediction,
       confidence,
       accuracy,
-      description: `Найдено совпадений: ${matches.length} (А:${alphaCount}, О:${omegaCount})`
+      description: `Паттерн встречался ${matches.length} раз (5-е: А:${alphaCount}, О:${omegaCount})`
     };
   };
 
@@ -885,55 +903,44 @@ const Index = () => {
   };
 
   const getAdaptiveAnalysis = () => {
-    const allPatterns = [];
+    const patterns = analyzeSequencesForLength(5);
     
-    for (let len = 4; len <= 6; len++) {
-      const patterns = analyzeSequencesForLength(len);
-      allPatterns.push(...patterns);
-    }
-    
-    const bestByLength = new Map<number, typeof allPatterns[0][]>();
-    for (let len = 4; len <= 6; len++) {
-      const forLength = allPatterns
-        .filter(p => p.length === len)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5);
-      if (forLength.length > 0) {
-        bestByLength.set(len, forLength);
-      }
-    }
-    
-    const topOverall = allPatterns
-      .sort((a, b) => b.score - a.score)
+    const topOverall = patterns
+      .sort((a, b) => {
+        // Приоритет по времени: более свежие паттерны важнее
+        const timeFactor = 0.3;
+        const scoreFactor = 0.7;
+        return (b.score * scoreFactor) - (a.score * scoreFactor);
+      })
       .slice(0, 5);
     
-    return { bestByLength, topOverall };
+    return { bestByLength: new Map(), topOverall };
   };
 
   const getAdaptivePrediction = () => {
+    if (history.length < 4) return null;
+    
     const { topOverall } = getAdaptiveAnalysis();
     
-    for (let len = 6; len >= 4; len--) {
-      if (history.length < len) continue;
-      
-      const recent = history.slice(-len + 1).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
-      
-      const match = topOverall.find(p => p.length === len && p.pattern === recent);
-      
-      if (match && match.confidence >= 70) {
-        return {
-          pattern: match.pattern,
-          fullSequence: match.fullSequence,
-          nextEvent: match.nextEvent,
-          prediction: match.prediction,
-          confidence: match.confidence,
-          alphaProb: match.alphaProb,
-          omegaProb: match.omegaProb,
-          occurrences: match.count,
-          length: match.length,
-          score: match.score
-        };
-      }
+    // Текущие последние 4 события
+    const recent4 = history.slice(-4).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
+    
+    // Ищем совпадение в топ-паттернах длиной 5 (4 события + 5-е прогноз)
+    const match = topOverall.find(p => p.length === 5 && p.pattern === recent4);
+    
+    if (match && match.confidence >= 65) {
+      return {
+        pattern: match.pattern,
+        fullSequence: match.fullSequence,
+        nextEvent: match.nextEvent,
+        prediction: match.prediction,
+        confidence: match.confidence,
+        alphaProb: match.alphaProb,
+        omegaProb: match.omegaProb,
+        occurrences: match.count,
+        length: match.length,
+        score: match.score
+      };
     }
     
     return null;
@@ -1019,11 +1026,11 @@ const Index = () => {
           <Card className="bg-white/5 border-white/10 p-6">
             <div className="flex items-center gap-3 mb-4">
               <Icon name="Database" size={24} className="text-[#0EA5E9]" />
-              <h3 className="text-xl font-bold">Топ-5 паттернов (адаптивный анализ)</h3>
+              <h3 className="text-xl font-bold">Топ-5 паттернов из 5 событий</h3>
               <Badge className="bg-[#0EA5E9]/20 text-[#0EA5E9] border-none">
                 Найдено: {topSequences.length}
               </Badge>
-              <span className="text-gray-400 text-sm ml-2">(длина от 4 до 6 событий)</span>
+              <span className="text-gray-400 text-sm ml-2">(4 события + 5-е событие = прогноз)</span>
             </div>
             
             <div className="space-y-3">
