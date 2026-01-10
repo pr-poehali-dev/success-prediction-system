@@ -1842,18 +1842,18 @@ const Index = () => {
           </Card>
         )}
 
-        {history.length > 0 && (
-          <Card className="bg-white/5 border-white/10 p-5">
-            <div className="flex items-center gap-3 mb-4">
-              <Icon name="History" size={20} className="text-[#8B5CF6]" />
-              <h3 className="text-xl font-bold">История событий и прогнозов</h3>
-              {predictionHistory.length > 0 && (
-                <Badge className="bg-[#8B5CF6]/20 text-[#8B5CF6] border-none">
-                  Точность: {((predictionHistory.filter(p => p.isCorrect).length / predictionHistory.length) * 100).toFixed(1)}%
-                </Badge>
-              )}
-            </div>
-            
+        <Card className="bg-white/5 border-white/10 p-5">
+          <div className="flex items-center gap-3 mb-4">
+            <Icon name="History" size={20} className="text-[#8B5CF6]" />
+            <h3 className="text-xl font-bold">История событий и прогнозов</h3>
+            {predictionHistory.length > 0 && (
+              <Badge className="bg-[#8B5CF6]/20 text-[#8B5CF6] border-none">
+                Точность: {((predictionHistory.filter(p => p.isCorrect).length / predictionHistory.length) * 100).toFixed(1)}%
+              </Badge>
+            )}
+          </div>
+          
+          {history.length > 0 ? (
             <div className="max-h-96 overflow-y-auto space-y-2">
               {history.slice().reverse().map((event, idx) => {
                 const eventNumber = history.length - idx;
@@ -1940,8 +1940,14 @@ const Index = () => {
                 );
               })}
             </div>
-          </Card>
-        )}
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Icon name="History" size={48} className="text-[#8B5CF6] mb-4" />
+              <h3 className="text-xl font-bold mb-2">История событий и прогнозов</h3>
+              <p className="text-gray-400 text-center">Начните добавлять события, чтобы увидеть историю</p>
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   );
