@@ -962,24 +962,10 @@ const Index = () => {
         } else {
           predicted = patternPrediction;
         }
-      } else if (strategy === 'recent') {
-        const recent = matches.slice(-Math.min(3, matches.length));
-        const alphaC = recent.filter(m => m.event === 'alpha').length;
-        const omegaC = recent.filter(m => m.event === 'omega').length;
-        predicted = alphaC >= omegaC ? 'alpha' : 'omega';
-      } else if (strategy === 'overall') {
+      } else {
         const alphaC = matches.filter(m => m.event === 'alpha').length;
         const omegaC = matches.filter(m => m.event === 'omega').length;
         predicted = alphaC >= omegaC ? 'alpha' : 'omega';
-      } else {
-        let alphaScore = 0;
-        let omegaScore = 0;
-        matches.forEach((m, idx) => {
-          const weight = Math.pow(1.5, idx - matches.length + 1);
-          if (m.event === 'alpha') alphaScore += weight;
-          else omegaScore += weight;
-        });
-        predicted = alphaScore >= omegaScore ? 'alpha' : 'omega';
       }
       
       if (predicted === actual) correct++;
@@ -995,15 +981,10 @@ const Index = () => {
     const { topOverall } = getAdaptiveAnalysis();
     const recent4 = history.slice(-4).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
     
-    const recentAccuracy = calculateStrategyAccuracy('recent');
     const overallAccuracy = calculateStrategyAccuracy('overall');
-    const weightedAccuracy = calculateStrategyAccuracy('weighted');
     const balanceAccuracy = calculateStrategyAccuracy('balance');
     
-    const bestStrategy = 
-      balanceAccuracy >= weightedAccuracy && balanceAccuracy >= recentAccuracy && balanceAccuracy >= overallAccuracy ? 'balance' :
-      weightedAccuracy >= recentAccuracy && weightedAccuracy >= overallAccuracy ? 'weighted' :
-      recentAccuracy >= overallAccuracy ? 'recent' : 'overall';
+    const bestStrategy = balanceAccuracy >= overallAccuracy ? 'balance' : 'overall';
     
     const matches: { event: Column, pos: number }[] = [];
     for (let j = 0; j < history.length - 4; j++) {
@@ -1050,34 +1031,13 @@ const Index = () => {
         confidence = Math.min(95, 60 + (dominant / matches.length) * 35);
         strategyName = '⚖️ Баланс (паттерн)';
       }
-    } else if (bestStrategy === 'recent') {
-      const recent = matches.slice(-Math.min(3, matches.length));
-      const alphaC = recent.filter(m => m.event === 'alpha').length;
-      const omegaC = recent.filter(m => m.event === 'omega').length;
-      prediction = alphaC >= omegaC ? 'alpha' : 'omega';
-      const dominant = Math.max(alphaC, omegaC);
-      confidence = Math.min(95, 60 + (dominant / recent.length) * 35);
-      strategyName = '🔥 Приоритет свежим данным';
-    } else if (bestStrategy === 'overall') {
+    } else {
       const alphaC = matches.filter(m => m.event === 'alpha').length;
       const omegaC = matches.filter(m => m.event === 'omega').length;
       prediction = alphaC >= omegaC ? 'alpha' : 'omega';
       const dominant = Math.max(alphaC, omegaC);
       confidence = Math.min(95, 55 + (dominant / matches.length) * 40);
-      strategyName = '📊 Общая статистика';
-    } else {
-      let alphaScore = 0;
-      let omegaScore = 0;
-      matches.forEach((m, idx) => {
-        const weight = Math.pow(1.5, idx);
-        if (m.event === 'alpha') alphaScore += weight;
-        else omegaScore += weight;
-      });
-      prediction = alphaScore >= omegaScore ? 'alpha' : 'omega';
-      const totalWeight = matches.reduce((sum, _, idx) => sum + Math.pow(1.5, idx), 0);
-      const dominantScore = Math.max(alphaScore, omegaScore);
-      confidence = Math.min(95, 58 + (dominantScore / totalWeight) * 37);
-      strategyName = '🔄 Взвешенный анализ';
+      strategyName = '🎯 Паттерн';
     }
     
     if (confidence < 60) return null;
@@ -1099,9 +1059,7 @@ const Index = () => {
       length: 5,
       score: matches.length * confidence,
       strategyName,
-      strategyAccuracy: bestStrategy === 'balance' ? balanceAccuracy :
-                        bestStrategy === 'recent' ? recentAccuracy : 
-                        bestStrategy === 'overall' ? overallAccuracy : weightedAccuracy,
+      strategyAccuracy: bestStrategy === 'balance' ? balanceAccuracy : overallAccuracy,
       imbalance,
       balanceInfo: `α:${currentAlpha} ω:${currentOmega}`
     };
@@ -1162,71 +1120,82 @@ const Index = () => {
           )}
         </div>
 
-        {prediction && (
-          <Card className="bg-gradient-to-br from-[#D946EF]/10 via-[#8B5CF6]/10 to-[#0EA5E9]/10 border-[#D946EF]/30 p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="bg-gradient-to-br from-[#D946EF] to-[#8B5CF6] p-4 rounded-xl">
-                  <Icon name="Sparkles" size={32} className="text-white" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold mb-1">Адаптивный прогноз</h2>
-                  <p className="text-gray-400 text-sm">
-                    Стратегия: {prediction.strategyName} • Точность: {prediction.strategyAccuracy.toFixed(1)}%
-                  </p>
-                  <p className="text-gray-500 text-xs mt-1">
-                    Текущий баланс: {prediction.balanceInfo} • Дисбаланс: {prediction.imbalance > 0 ? '+' : ''}{prediction.imbalance}
-                  </p>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-6">
-                <div className={`px-8 py-4 rounded-xl border-2 ${
-                  prediction.prediction === 'alpha'
-                    ? 'bg-[#0EA5E9]/20 border-[#0EA5E9]'
-                    : 'bg-[#8B5CF6]/20 border-[#8B5CF6]'
-                }`}>
-                  <div className="text-sm text-gray-400 mb-1 text-center">Следующее событие</div>
-                  <div className={`text-5xl font-bold ${
-                    prediction.prediction === 'alpha' ? 'text-[#0EA5E9]' : 'text-[#8B5CF6]'
-                  }`}>
-                    {prediction.nextEvent}
+        <Card className="bg-gradient-to-br from-[#D946EF]/10 via-[#8B5CF6]/10 to-[#0EA5E9]/10 border-[#D946EF]/30 p-6">
+          {prediction ? (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="bg-gradient-to-br from-[#D946EF] to-[#8B5CF6] p-4 rounded-xl">
+                    <Icon name="Sparkles" size={32} className="text-white" />
                   </div>
-                </div>
-              </div>
-            </div>
-            
-            <div className="mt-4 pt-4 border-t border-white/10">
-              <div className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400">Паттерн ({prediction.length - 1} → 1):</span>
-                  <div className="flex gap-1">
-                    {prediction.fullSequence.split('-').map((s, i) => (
-                      <Badge key={i} className={`${
-                        s === 'α' ? 'bg-[#0EA5E9] text-white' : 'bg-[#8B5CF6] text-white'
-                      } border-none ${i === prediction.length - 1 ? 'ring-2 ring-[#D946EF]' : ''}`}>{s}</Badge>
-                    ))}
+                  <div>
+                    <h2 className="text-2xl font-bold mb-1">Адаптивный прогноз</h2>
+                    <p className="text-gray-400 text-sm">
+                      Стратегия: {prediction.strategyName} • Точность: {prediction.strategyAccuracy.toFixed(1)}%
+                    </p>
+                    <p className="text-gray-500 text-xs mt-1">
+                      Текущий баланс: {prediction.balanceInfo} • Дисбаланс: {prediction.imbalance > 0 ? '+' : ''}{prediction.imbalance}
+                    </p>
                   </div>
                 </div>
                 
-                <div className="flex gap-6">
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded bg-[#0EA5E9]" />
-                    <span className="text-gray-400">α: {prediction.alphaProb.toFixed(1)}%</span>
+                <div className="flex items-center gap-6">
+                  <div className={`px-8 py-4 rounded-xl border-2 ${
+                    prediction.prediction === 'alpha'
+                      ? 'bg-[#0EA5E9]/20 border-[#0EA5E9]'
+                      : 'bg-[#8B5CF6]/20 border-[#8B5CF6]'
+                  }`}>
+                    <div className="text-sm text-gray-400 mb-1 text-center">Следующее событие</div>
+                    <div className={`text-5xl font-bold ${
+                      prediction.prediction === 'alpha' ? 'text-[#0EA5E9]' : 'text-[#8B5CF6]'
+                    }`}>
+                      {prediction.nextEvent}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded bg-[#8B5CF6]" />
-                    <span className="text-gray-400">ω: {prediction.omegaProb.toFixed(1)}%</span>
-                  </div>
-                  <span className="text-gray-400">Встречался: {prediction.occurrences} раз</span>
                 </div>
               </div>
+              
+              <div className="mt-4 pt-4 border-t border-white/10">
+                <div className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400">Паттерн ({prediction.length - 1} → 1):</span>
+                    <div className="flex gap-1">
+                      {prediction.fullSequence.split('-').map((s, i) => (
+                        <Badge key={i} className={`${
+                          s === 'α' ? 'bg-[#0EA5E9] text-white' : 'bg-[#8B5CF6] text-white'
+                        } border-none ${i === prediction.length - 1 ? 'ring-2 ring-[#D946EF]' : ''}`}>{s}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-6">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded bg-[#0EA5E9]" />
+                      <span className="text-gray-400">α: {prediction.alphaProb.toFixed(1)}%</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded bg-[#8B5CF6]" />
+                      <span className="text-gray-400">ω: {prediction.omegaProb.toFixed(1)}%</span>
+                    </div>
+                    <span className="text-gray-400">Встречался: {prediction.occurrences} раз</span>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="bg-gradient-to-br from-[#D946EF] to-[#8B5CF6] p-4 rounded-xl mb-4">
+                <Icon name="Sparkles" size={32} className="text-white" />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Адаптивный прогноз</h2>
+              <p className="text-gray-400 text-center">Накопите минимум 5 событий для первого прогноза</p>
             </div>
-          </Card>
-        )}
+          )}
+        </Card>
 
-        {topSequences.length > 0 && (
-          <Card className="bg-white/5 border-white/10 p-6">
+        <Card className="bg-white/5 border-white/10 p-6">
+          {topSequences.length > 0 ? (
+            <>
             <div className="flex items-center gap-3 mb-4">
               <Icon name="Database" size={24} className="text-[#0EA5E9]" />
               <h3 className="text-xl font-bold">Топ-5 паттернов из 5 событий</h3>
@@ -1309,17 +1278,25 @@ const Index = () => {
                 </div>
               ))}
             </div>
-          </Card>
-        )}
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8">
+              <Icon name="Database" size={48} className="text-[#0EA5E9] mb-4" />
+              <h3 className="text-xl font-bold mb-2">Топ-5 паттернов из 5 событий</h3>
+              <p className="text-gray-400 text-center">Накопите больше данных для анализа паттернов</p>
+            </div>
+          )}
+        </Card>
 
-        {history.length >= 10 && (
-          <Card className="bg-white/5 border-white/10 p-6">
+        <Card className="bg-white/5 border-white/10 p-6">
+          {history.length >= 10 ? (
+            <>
             <div className="flex items-center gap-3 mb-4">
               <Icon name="Target" size={24} className="text-[#D946EF]" />
               <h3 className="text-xl font-bold">Адаптивный выбор стратегии</h3>
             </div>
             
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="bg-white/5 rounded-lg p-4 border border-white/10">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="text-lg">⚖️</span>
@@ -1336,38 +1313,10 @@ const Index = () => {
 
               <div className="bg-white/5 rounded-lg p-4 border border-white/10">
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">🔥</span>
-                  <span className="font-semibold text-sm">Свежие данные</span>
+                  <span className="text-lg">🎯</span>
+                  <span className="font-semibold text-sm">Паттерн</span>
                 </div>
-                <p className="text-xs text-gray-400 mb-2">Последние 3 совпадения</p>
-                <div className="flex items-center gap-2">
-                  <Progress value={calculateStrategyAccuracy('recent')} className="flex-1 h-2" />
-                  <span className="text-sm font-semibold text-[#0EA5E9]">
-                    {calculateStrategyAccuracy('recent').toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-
-              <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">🔄</span>
-                  <span className="font-semibold text-sm">Взвешенный</span>
-                </div>
-                <p className="text-xs text-gray-400 mb-2">Веса по времени</p>
-                <div className="flex items-center gap-2">
-                  <Progress value={calculateStrategyAccuracy('weighted')} className="flex-1 h-2" />
-                  <span className="text-sm font-semibold text-[#0EA5E9]">
-                    {calculateStrategyAccuracy('weighted').toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-
-              <div className="bg-white/5 rounded-lg p-4 border border-white/10">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-lg">📊</span>
-                  <span className="font-semibold text-sm">Общая стат.</span>
-                </div>
-                <p className="text-xs text-gray-400 mb-2">Все равноценны</p>
+                <p className="text-xs text-gray-400 mb-2">Анализ последовательностей</p>
                 <div className="flex items-center gap-2">
                   <Progress value={calculateStrategyAccuracy('overall')} className="flex-1 h-2" />
                   <span className="text-sm font-semibold text-[#0EA5E9]">
@@ -1383,8 +1332,15 @@ const Index = () => {
                 Система автоматически выбирает стратегию с наилучшей точностью. <strong>Стратегия Баланс</strong> учитывает стремление к равновесию 50/50 между α и ω.
               </p>
             </div>
-          </Card>
-        )}
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8">
+              <Icon name="Target" size={48} className="text-[#D946EF] mb-4" />
+              <h3 className="text-xl font-bold mb-2">Адаптивный выбор стратегии</h3>
+              <p className="text-gray-400 text-center">Накопите минимум 10 событий для анализа стратегий</p>
+            </div>
+          )}
+        </Card>
 
         <div className="flex gap-3 justify-center flex-wrap">
           <Button
