@@ -54,17 +54,38 @@ const Index = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // ─── Анализ паттернов (4 события) с учётом баланса 50/50 ───────────────────
+  // ─── Найти последнюю серию из 5 одинаковых подряд и позицию после неё ─────
+  const findLastStreak = (hist: Column[]): { streakType: Column; offsetFromEnd: number } | null => {
+    // Ищем с конца: последнее вхождение 5×alpha или 5×omega подряд
+    for (let i = hist.length - 6; i >= 0; i--) {
+      const slice = hist.slice(i, i + 5);
+      if (slice.every(c => c === 'alpha') || slice.every(c => c === 'omega')) {
+        return {
+          streakType: slice[0],
+          offsetFromEnd: hist.length - (i + 5) // сколько событий прошло после серии
+        };
+      }
+    }
+    return null;
+  };
+
+  // ─── Анализ паттернов: отправная точка — серия 5 одинаковых ────────────────
   const computePrediction = (hist: Column[]): { column: Column; confidence: number; strategyName: string; alphaProb: number; omegaProb: number; occurrences: number; pattern: string; imbalance: number } | null => {
-    if (hist.length < 5) return null;
+    if (hist.length < 6) return null;
 
-    const last4 = hist.slice(-4).join('-');
+    const streak = findLastStreak(hist);
+    if (!streak) return null;
 
-    // Находим все вхождения этого паттерна в истории (кроме хвоста)
+    const { streakType, offsetFromEnd } = streak;
+    // Позиция после серии, которую нужно предсказать = offsetFromEnd-я (0-indexed)
+    const targetOffset = offsetFromEnd; // нам нужно предсказать событие на позиции offsetFromEnd
+
+    // Собираем статистику: после каждой серии 5×streakType что было на позиции targetOffset?
     const matches: Column[] = [];
-    for (let j = 0; j <= hist.length - 5; j++) {
-      if (hist.slice(j, j + 4).join('-') === last4) {
-        matches.push(hist[j + 4]);
+    for (let i = 0; i <= hist.length - 5 - targetOffset - 1; i++) {
+      const slice = hist.slice(i, i + 5);
+      if (slice.every(c => c === streakType)) {
+        matches.push(hist[i + 5 + targetOffset]);
       }
     }
 
@@ -75,44 +96,20 @@ const Index = () => {
     const alphaProb = (alphaCount / matches.length) * 100;
     const omegaProb = (omegaCount / matches.length) * 100;
 
-    // Паттерн-прогноз
-    const patternPrediction: Column = alphaCount >= omegaCount ? 'alpha' : 'omega';
+    const prediction: Column = alphaCount >= omegaCount ? 'alpha' : 'omega';
+    const dominant = Math.max(alphaCount, omegaCount);
+    const confidence = Math.min(95, 55 + (dominant / matches.length) * 40);
 
-    // Баланс 50/50
+    const streakLabel = streakType === 'alpha' ? '5×α' : '5×ω';
+    const posLabel = targetOffset + 1;
+    const strategyName = `🎯 После ${streakLabel} → позиция +${posLabel}`;
+
     const currentAlpha = hist.filter(c => c === 'alpha').length;
     const currentOmega = hist.filter(c => c === 'omega').length;
     const imbalance = currentAlpha - currentOmega;
 
-    let prediction: Column;
-    let confidence: number;
-    let strategyName: string;
-
-    if (Math.abs(imbalance) >= 3) {
-      const balancePrediction: Column = imbalance > 0 ? 'omega' : 'alpha';
-      const balanceWeight = Math.min(0.7, Math.abs(imbalance) / hist.length * 2);
-      const patternWeight = 1 - balanceWeight;
-
-      if (balancePrediction === patternPrediction) {
-        prediction = patternPrediction;
-        const dominant = Math.max(alphaCount, omegaCount);
-        confidence = Math.min(95, 65 + (dominant / matches.length) * 30 + balanceWeight * 15);
-        strategyName = `⚖️ Паттерн + Баланс (сходятся)`;
-      } else {
-        prediction = balanceWeight > patternWeight ? balancePrediction : patternPrediction;
-        const baseConf = balanceWeight > patternWeight ? 60 : 55;
-        confidence = Math.min(90, baseConf + Math.abs(imbalance) * 3);
-        strategyName = balanceWeight > patternWeight
-          ? `⚖️ Баланс (перевес: ${imbalance > 0 ? '+' : ''}${imbalance})`
-          : `🎯 Паттерн (слабый дисбаланс)`;
-      }
-    } else {
-      prediction = patternPrediction;
-      const dominant = Math.max(alphaCount, omegaCount);
-      confidence = Math.min(95, 60 + (dominant / matches.length) * 35);
-      strategyName = '🎯 Паттерн (баланс OK)';
-    }
-
-    if (confidence < 55) return null;
+    // Паттерн для отображения: серия + offset
+    const patternDisplay = Array(5).fill(streakType).join('-');
 
     return {
       column: prediction,
@@ -121,31 +118,43 @@ const Index = () => {
       alphaProb,
       omegaProb,
       occurrences: matches.length,
-      pattern: last4,
+      pattern: patternDisplay,
       imbalance
     };
   };
 
-  // ─── Топ-5 паттернов (по всей истории) ─────────────────────────────────────
+  // ─── Топ-5 паттернов: для каждой серии 5×alpha/omega — распределение по позициям ─
   const getTopPatterns = (hist: Column[]) => {
-    if (hist.length < 5) return [];
+    if (hist.length < 6) return [];
 
+    // Собираем по каждой серии и позиции offset 0..4
     const map = new Map<string, { nextAlpha: number; nextOmega: number }>();
-    for (let i = 0; i <= hist.length - 5; i++) {
-      const key = hist.slice(i, i + 4).join('-');
-      const next = hist[i + 4];
-      if (!map.has(key)) map.set(key, { nextAlpha: 0, nextOmega: 0 });
-      const d = map.get(key)!;
-      if (next === 'alpha') d.nextAlpha++; else d.nextOmega++;
+    for (const sType of ['alpha', 'omega'] as Column[]) {
+      for (let offset = 0; offset <= 4; offset++) {
+        let nextAlpha = 0;
+        let nextOmega = 0;
+        for (let i = 0; i <= hist.length - 5 - offset - 1; i++) {
+          const slice = hist.slice(i, i + 5);
+          if (slice.every(c => c === sType)) {
+            const next = hist[i + 5 + offset];
+            if (next === 'alpha') nextAlpha++; else nextOmega++;
+          }
+        }
+        if (nextAlpha + nextOmega > 0) {
+          const key = `${Array(5).fill(sType).join('-')}|+${offset + 1}`;
+          map.set(key, { nextAlpha, nextOmega });
+        }
+      }
     }
 
     return Array.from(map.entries())
-      .filter(([, d]) => d.nextAlpha + d.nextOmega >= 2)
-      .map(([pattern, d]) => {
+      .filter(([, d]) => d.nextAlpha + d.nextOmega >= 1)
+      .map(([key, d]) => {
+        const [patternRaw, offsetLabel] = key.split('|');
         const total = d.nextAlpha + d.nextOmega;
         const conf = (Math.max(d.nextAlpha, d.nextOmega) / total) * 100;
         return {
-          pattern,
+          pattern: patternRaw + '|' + offsetLabel,
           total,
           nextAlpha: d.nextAlpha,
           nextOmega: d.nextOmega,
@@ -492,7 +501,7 @@ const Index = () => {
               <div className="mt-4 pt-4 border-t border-white/10">
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-400">Паттерн (4 ист. → 5-е):</span>
+                    <span className="text-gray-400">Серия:</span>
                     <div className="flex gap-1">
                       {adaptivePred.pattern.split('-').map((s, i) => (
                         <Badge key={i} className={`${s === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none`}>
@@ -520,7 +529,7 @@ const Index = () => {
                 <Icon name="Sparkles" size={32} className="text-white" />
               </div>
               <h2 className="text-2xl font-bold mb-2">Прогноз</h2>
-              <p className="text-gray-400 text-center">Накопите минимум 5 событий для первого прогноза</p>
+              <p className="text-gray-400 text-center">Ожидание серии из 5 одинаковых подряд (αααααα или ωωωωω)</p>
             </div>
           )}
         </Card>
@@ -533,22 +542,23 @@ const Index = () => {
                 <Icon name="Database" size={24} className="text-[#0EA5E9]" />
                 <h3 className="text-xl font-bold">Топ-5 паттернов</h3>
                 <Badge className="bg-[#0EA5E9]/20 text-[#0EA5E9] border-none">{topPatterns.length} найдено</Badge>
-                <span className="text-gray-500 text-xs">(4 события → 5-е)</span>
+                <span className="text-gray-500 text-xs">(5×серия → позиция)</span>
               </div>
               <div className="space-y-3">
                 {topPatterns.map((seq, idx) => {
-                  const isActive = adaptivePred && seq.pattern === adaptivePred.pattern;
+                  const [patternPart, offsetPart] = seq.pattern.split('|');
+                  const streakType = patternPart.split('-')[0];
+                  const isActive = adaptivePred && patternPart === adaptivePred.pattern;
                   return (
                     <div key={idx} className={`bg-white/5 rounded-lg p-4 border ${isActive ? 'border-[#D946EF] bg-[#D946EF]/10' : 'border-white/10'}`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <Badge className="bg-gradient-to-r from-[#0EA5E9] to-[#8B5CF6] text-white border-none px-3">#{idx + 1}</Badge>
                           <div className="flex items-center gap-1">
-                            {seq.pattern.split('-').map((s, i) => (
-                              <Badge key={i} className={`${s === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none font-bold`}>
-                                {s === 'alpha' ? 'α' : 'ω'}
-                              </Badge>
-                            ))}
+                            <Badge className={`${streakType === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none font-bold px-2`}>
+                              5×{streakType === 'alpha' ? 'α' : 'ω'}
+                            </Badge>
+                            <span className="text-gray-500 text-xs">{offsetPart}</span>
                             <span className="text-gray-500 mx-1">→</span>
                             <Badge className={`${seq.prediction === 'alpha' ? 'bg-[#0EA5E9]/30 text-[#0EA5E9] border-[#0EA5E9]' : 'bg-[#8B5CF6]/30 text-[#8B5CF6] border-[#8B5CF6]'} border font-bold`}>
                               {seq.prediction === 'alpha' ? 'α' : 'ω'}
