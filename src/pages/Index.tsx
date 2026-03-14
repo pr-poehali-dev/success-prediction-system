@@ -91,31 +91,31 @@ const Index = () => {
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
   const analyzeSequencePattern = (recHist: Column[]): AlgorithmPrediction => {
-    if (recHist.length < 5) {
+    if (recHist.length < 6) {
       return {
-        name: 'Анализ последовательностей из 5 событий',
+        name: 'Анализ последовательностей из 6 событий',
         prediction: 'alpha',
         confidence: 50,
         accuracy: 0,
-        description: 'Анализ паттернов: 4 события + 5-е событие (прогноз)'
+        description: 'Анализ паттернов: 5 событий + 6-е событие (прогноз)'
       };
     }
 
-    // Берем последние 4 события для поиска паттерна
-    const last4 = recHist.slice(-4);
+    // Берем последние 5 событий для поиска паттерна
+    const last4 = recHist.slice(-5);
     const currentPattern = last4.join('-');
     
-    // Ищем все последовательности из 5 событий (4 + 5-е) в истории
+    // Ищем все последовательности из 6 событий (5 + 6-е) в истории
     const matches: { sequence: Column[], fifthEvent: Column, timestamp: number }[] = [];
     
-    for (let i = 0; i <= recHist.length - 5; i++) {
-      const historicalPattern = recHist.slice(i, i + 4).join('-');
+    for (let i = 0; i <= recHist.length - 6; i++) {
+      const historicalPattern = recHist.slice(i, i + 5).join('-');
       
-      // Если первые 4 события совпадают с текущим паттерном
+      // Если первые 5 событий совпадают с текущим паттерном
       if (historicalPattern === currentPattern) {
-        const fifthEvent = recHist[i + 4];
+        const fifthEvent = recHist[i + 5];
         matches.push({
-          sequence: recHist.slice(i, i + 5),
+          sequence: recHist.slice(i, i + 6),
           fifthEvent: fifthEvent,
           timestamp: i
         });
@@ -162,14 +162,14 @@ const Index = () => {
     let correctPredictions = 0;
     let totalPredictions = 0;
     
-    for (let i = 5; i < recHist.length; i++) {
-      const testPattern = recHist.slice(i - 5, i - 1).join('-');
+    for (let i = 6; i < recHist.length; i++) {
+      const testPattern = recHist.slice(i - 6, i - 1).join('-');
       const actualFifth = recHist[i - 1];
       
       const historicalMatches: Column[] = [];
-      for (let j = 0; j < i - 5; j++) {
-        if (recHist.slice(j, j + 4).join('-') === testPattern) {
-          historicalMatches.push(recHist[j + 4]);
+      for (let j = 0; j < i - 6; j++) {
+        if (recHist.slice(j, j + 5).join('-') === testPattern) {
+          historicalMatches.push(recHist[j + 5]);
         }
       }
       
@@ -188,11 +188,11 @@ const Index = () => {
     const accuracy = totalPredictions > 0 ? (correctPredictions / totalPredictions) * 100 : 0;
 
     return {
-      name: 'Анализ последовательностей из 5 событий',
+      name: 'Анализ последовательностей из 6 событий',
       prediction,
       confidence,
       accuracy,
-      description: `Паттерн встречался ${matches.length} раз (5-е: А:${alphaCount}, О:${omegaCount})`
+      description: `Паттерн встречался ${matches.length} раз (6-е: А:${alphaCount}, О:${omegaCount})`
     };
   };
 
@@ -903,7 +903,7 @@ const Index = () => {
   };
 
   const getAdaptiveAnalysis = () => {
-    const patterns = analyzeSequencesForLength(5);
+    const patterns = analyzeSequencesForLength(6);
     
     const topOverall = patterns
       .sort((a, b) => {
@@ -918,21 +918,21 @@ const Index = () => {
   };
 
   const calculateStrategyAccuracy = (strategy: 'recent' | 'overall' | 'weighted' | 'balance', windowSize: number = 10) => {
-    if (history.length < 5) return 0;
+    if (history.length < 6) return 0;
     
     let correct = 0;
     let total = 0;
-    const startIdx = Math.max(5, history.length - windowSize);
+    const startIdx = Math.max(6, history.length - windowSize);
     
     for (let i = startIdx; i < history.length; i++) {
-      const pattern = history.slice(i - 4, i).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
+      const pattern = history.slice(i - 5, i).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
       const actual = history[i].column;
       
       const matches: { event: Column, pos: number }[] = [];
-      for (let j = 0; j < i - 4; j++) {
-        const histPattern = history.slice(j, j + 4).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
+      for (let j = 0; j < i - 5; j++) {
+        const histPattern = history.slice(j, j + 5).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
         if (histPattern === pattern) {
-          matches.push({ event: history[j + 4].column, pos: j });
+          matches.push({ event: history[j + 5].column, pos: j });
         }
       }
       
@@ -976,10 +976,10 @@ const Index = () => {
   };
 
   const getAdaptivePrediction = () => {
-    if (history.length < 5) return null;
+    if (history.length < 6) return null;
     
     const { topOverall } = getAdaptiveAnalysis();
-    const recent4 = history.slice(-4).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
+    const recent4 = history.slice(-5).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
     
     const overallAccuracy = calculateStrategyAccuracy('overall');
     const balanceAccuracy = calculateStrategyAccuracy('balance');
@@ -987,10 +987,10 @@ const Index = () => {
     const bestStrategy = balanceAccuracy >= overallAccuracy ? 'balance' : 'overall';
     
     const matches: { event: Column, pos: number }[] = [];
-    for (let j = 0; j < history.length - 4; j++) {
-      const histPattern = history.slice(j, j + 4).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
+    for (let j = 0; j < history.length - 5; j++) {
+      const histPattern = history.slice(j, j + 5).map(e => e.column === 'alpha' ? 'α' : 'ω').join('-');
       if (histPattern === recent4) {
-        matches.push({ event: history[j + 4].column, pos: j });
+        matches.push({ event: history[j + 5].column, pos: j });
       }
     }
     
@@ -1079,7 +1079,7 @@ const Index = () => {
             SUCCESS Predictor
           </h1>
           <p className="text-gray-400">Адаптивная система прогнозирования с машинным обучением</p>
-          <p className="text-sm text-gray-500">Анализ паттернов из 5 событий • Автоматический выбор стратегии • Самообучение</p>
+          <p className="text-sm text-gray-500">Анализ паттернов из 6 событий • Автоматический выбор стратегии • Самообучение</p>
           
           {history.length > 0 && (
             <div className="mt-4 max-w-md mx-auto">
