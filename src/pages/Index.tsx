@@ -417,7 +417,7 @@ const Index = () => {
     if (!isCapturing || !isRunning || isPaused || !captureArea) return;
 
     let lastExecutionTime = Date.now();
-    let intervalId: number;
+    let intervalId: number = 0;
     let isExecuting = false;
 
     const performRecognition = async () => {
@@ -1668,6 +1668,78 @@ const Index = () => {
                   {ensemblePrediction.confidence.toFixed(1)}%
                 </div>
               </div>
+            </div>
+          </Card>
+        )}
+
+        {predictions.length > 0 && (
+          <Card className="bg-gradient-to-br from-[#8B5CF6]/5 via-[#0EA5E9]/5 to-[#D946EF]/5 border-white/10 p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <Icon name="BarChart2" size={24} className="text-[#8B5CF6]" />
+              <h3 className="text-xl font-bold">Рейтинг точности алгоритмов</h3>
+              <span className="text-xs text-gray-500 ml-2">по накопленной истории</span>
+            </div>
+            <div className="space-y-3">
+              {[...predictions]
+                .sort((a, b) => b.accuracy - a.accuracy)
+                .map((pred, idx) => {
+                  const rank = idx + 1;
+                  const color = rank === 1 ? '#D946EF' : rank === 2 ? '#8B5CF6' : rank === 3 ? '#0EA5E9' : null;
+                  const rankBg = color ? `${color}33` : '#ffffff10';
+                  const rankBorder = color ? `1px solid ${color}` : '1px solid #ffffff20';
+                  const rankColor = color ?? '#9ca3af';
+                  return (
+                    <div key={pred.name} className="flex items-center gap-3">
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                        style={{ background: rankBg, border: rankBorder, color: rankColor }}
+                      >
+                        {rank}
+                      </div>
+                      <div className="w-36 flex-shrink-0">
+                        <div className="text-xs font-medium text-gray-300 truncate">{pred.name}</div>
+                        <div className="text-xs text-gray-500 truncate">{pred.description}</div>
+                      </div>
+                      <div className="flex-1">
+                        <div className="relative h-2 bg-white/10 rounded-full overflow-hidden">
+                          <div
+                            className="absolute left-0 top-0 h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${pred.accuracy}%`,
+                              background: color
+                                ? `linear-gradient(90deg, ${color}99, ${color})`
+                                : 'linear-gradient(90deg, #ffffff30, #ffffff50)'
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div className="w-14 text-right flex-shrink-0">
+                        <span className="text-sm font-bold" style={{ color: color ?? '#9ca3af' }}>
+                          {pred.accuracy > 0 ? `${pred.accuracy.toFixed(1)}%` : '—'}
+                        </span>
+                      </div>
+                      <div className="w-16 text-right flex-shrink-0">
+                        <span className="text-xs text-gray-500">
+                          ув. {pred.confidence.toFixed(0)}%
+                        </span>
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className={`text-xs flex-shrink-0 ${
+                          pred.prediction === 'alpha'
+                            ? 'border-[#0EA5E9]/50 text-[#0EA5E9]'
+                            : 'border-[#8B5CF6]/50 text-[#8B5CF6]'
+                        }`}
+                      >
+                        {pred.prediction === 'alpha' ? 'α' : 'ω'}
+                      </Badge>
+                    </div>
+                  );
+                })}
+            </div>
+            <div className="mt-4 pt-4 border-t border-white/10 flex items-center justify-between text-xs text-gray-500">
+              <span>Точность = доля верных прогнозов по каждому методу за всё время</span>
+              <span>— = нет данных</span>
             </div>
           </Card>
         )}
