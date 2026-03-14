@@ -54,17 +54,17 @@ const Index = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // ─── Анализ паттернов (5 событий) с учётом баланса 50/50 ───────────────────
+  // ─── Анализ паттернов (4 события) с учётом баланса 50/50 ───────────────────
   const computePrediction = (hist: Column[]): { column: Column; confidence: number; strategyName: string; alphaProb: number; omegaProb: number; occurrences: number; pattern: string; imbalance: number } | null => {
-    if (hist.length < 6) return null;
+    if (hist.length < 5) return null;
 
-    const last5 = hist.slice(-5).join('-');
+    const last4 = hist.slice(-4).join('-');
 
     // Находим все вхождения этого паттерна в истории (кроме хвоста)
     const matches: Column[] = [];
-    for (let j = 0; j <= hist.length - 6; j++) {
-      if (hist.slice(j, j + 5).join('-') === last5) {
-        matches.push(hist[j + 5]);
+    for (let j = 0; j <= hist.length - 5; j++) {
+      if (hist.slice(j, j + 4).join('-') === last4) {
+        matches.push(hist[j + 4]);
       }
     }
 
@@ -121,19 +121,19 @@ const Index = () => {
       alphaProb,
       omegaProb,
       occurrences: matches.length,
-      pattern: last5,
+      pattern: last4,
       imbalance
     };
   };
 
   // ─── Топ-5 паттернов (по всей истории) ─────────────────────────────────────
   const getTopPatterns = (hist: Column[]) => {
-    if (hist.length < 6) return [];
+    if (hist.length < 5) return [];
 
     const map = new Map<string, { nextAlpha: number; nextOmega: number }>();
-    for (let i = 0; i <= hist.length - 6; i++) {
-      const key = hist.slice(i, i + 5).join('-');
-      const next = hist[i + 5];
+    for (let i = 0; i <= hist.length - 5; i++) {
+      const key = hist.slice(i, i + 4).join('-');
+      const next = hist[i + 4];
       if (!map.has(key)) map.set(key, { nextAlpha: 0, nextOmega: 0 });
       const d = map.get(key)!;
       if (next === 'alpha') d.nextAlpha++; else d.nextOmega++;
@@ -425,7 +425,7 @@ const Index = () => {
             SUCCESS Predictor
           </h1>
           <p className="text-gray-400">Анализ паттернов • Баланс 50/50</p>
-          <p className="text-sm text-gray-500">Паттерн: 5 событий → прогноз 6-го</p>
+          <p className="text-sm text-gray-500">Паттерн: 4 события → прогноз 5-го</p>
 
           {history.length > 0 && (
             <div className="mt-4 max-w-md mx-auto">
@@ -492,7 +492,7 @@ const Index = () => {
               <div className="mt-4 pt-4 border-t border-white/10">
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2">
-                    <span className="text-gray-400">Паттерн (5 ист. → 6-е):</span>
+                    <span className="text-gray-400">Паттерн (4 ист. → 5-е):</span>
                     <div className="flex gap-1">
                       {adaptivePred.pattern.split('-').map((s, i) => (
                         <Badge key={i} className={`${s === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none`}>
@@ -520,7 +520,7 @@ const Index = () => {
                 <Icon name="Sparkles" size={32} className="text-white" />
               </div>
               <h2 className="text-2xl font-bold mb-2">Прогноз</h2>
-              <p className="text-gray-400 text-center">Накопите минимум 6 событий для первого прогноза</p>
+              <p className="text-gray-400 text-center">Накопите минимум 5 событий для первого прогноза</p>
             </div>
           )}
         </Card>
@@ -533,7 +533,7 @@ const Index = () => {
                 <Icon name="Database" size={24} className="text-[#0EA5E9]" />
                 <h3 className="text-xl font-bold">Топ-5 паттернов</h3>
                 <Badge className="bg-[#0EA5E9]/20 text-[#0EA5E9] border-none">{topPatterns.length} найдено</Badge>
-                <span className="text-gray-500 text-xs">(5 событий → 6-е)</span>
+                <span className="text-gray-500 text-xs">(4 события → 5-е)</span>
               </div>
               <div className="space-y-3">
                 {topPatterns.map((seq, idx) => {
