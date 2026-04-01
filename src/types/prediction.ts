@@ -20,8 +20,9 @@ export interface AIPrediction {
   prediction: Column;
   confidence: number;
   reasoning: string[];
-  weights: { pattern: number; frequency: number; entropy: number };
-  agreement: 'full' | 'partial' | 'conflict';
+  matchedPattern: string | null;       // найденный паттерн (символы), например "ωωωω"
+  nextPattern: Column[];               // ожидаемая последовательность из 5 значений
+  nextPatternConfidence: number;       // уверенность в nextPattern
 }
 
 export interface AccuracyPoint {

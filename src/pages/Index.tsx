@@ -7,10 +7,9 @@ import Icon from '@/components/ui/icon';
 import { toast } from '@/hooks/use-toast';
 import {
   Column, HistoryEvent, PredictionHistory,
-  CaptureArea, AlgorithmPrediction, AIPrediction, MethodPredictionHistory
+  CaptureArea, AIPrediction, MethodPredictionHistory
 } from '@/types/prediction';
-import { analyzePattern, analyzeFrequency, analyzeEntropy } from '@/utils/predictionAlgorithms';
-import { runAIPredictor } from '@/utils/aiPredictor';
+import { runPatternAI } from '@/utils/predictionAlgorithms';
 
 const Index = () => {
   const [history, setHistory] = useState<HistoryEvent[]>([]);
@@ -18,8 +17,6 @@ const Index = () => {
   const [currentSuccess, setCurrentSuccess] = useState<Column | null>(null);
   const [timeLeft, setTimeLeft] = useState(30);
 
-  // Алгоритмы
-  const [algoResults, setAlgoResults] = useState<AlgorithmPrediction[]>([]);
   const [aiResult, setAiResult] = useState<AIPrediction | null>(null);
   const [methodHistory, setMethodHistory] = useState<MethodPredictionHistory[]>([]);
 
@@ -42,72 +39,22 @@ const Index = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // ─── Запуск всех алгоритмов ──────────────────────────────────────────────────
+  // ─── Запуск алгоритма ─────────────────────────────────────────────────────
   const runPredictions = (hist: Column[], mHistory: MethodPredictionHistory[]) => {
     if (hist.length < 4) return;
-
-    const pattern = analyzePattern(hist, mHistory);
-    const frequency = analyzeFrequency(hist, mHistory);
-    const entropy = analyzeEntropy(hist, mHistory);
-    const algos = [pattern, frequency, entropy];
-
-    setAlgoResults(algos);
-
-    const ai = runAIPredictor(algos, mHistory, hist);
+    const ai = runPatternAI(hist, mHistory);
     setAiResult(ai);
-
     setCurrentPrediction({ column: ai.prediction, confidence: ai.confidence });
     setPreviousPrediction(ai.prediction);
   };
 
-  // ─── Обновление предсказаний при новой истории ───────────────────────────────
   useEffect(() => {
     if (recognizedHistory.length > 0) {
       runPredictions(recognizedHistory, methodHistory);
     }
   }, [recognizedHistory]);
 
-  // ─── Ручное добавление события ───────────────────────────────────────────────
-  const handleManualAdd = (col: Column) => {
-    if (previousPrediction && currentPrediction) {
-      const isCorrect = previousPrediction === col;
-      setLastPredictionResult(isCorrect ? 'correct' : 'incorrect');
-      setTimeout(() => setLastPredictionResult(null), 5000);
-
-      const ts = Date.now();
-
-      // Записываем результат в историю каждого метода
-      setMethodHistory(prev => {
-        const newEntries: MethodPredictionHistory[] = algoResults.map((a, idx) => ({
-          id: ts + idx,
-          timestamp: new Date(),
-          methodName: a.name,
-          prediction: a.prediction,
-          actual: col,
-          isCorrect: a.prediction === col,
-          confidence: a.confidence,
-        }));
-        return [...prev, ...newEntries];
-      });
-
-      setPredictionHistory(prev => [...prev, {
-        id: ts,
-        timestamp: new Date(),
-        prediction: previousPrediction,
-        actual: col,
-        isCorrect,
-        confidence: currentPrediction.confidence
-      }]);
-    }
-
-    const newEvent: HistoryEvent = { id: Date.now(), column: col, timestamp: new Date(), source: 'manual' };
-    setHistory(prev => [...prev, newEvent]);
-    setRecognizedHistory(prev => [...prev, col]);
-    setCurrentSuccess(col);
-    setTimeout(() => setCurrentSuccess(null), 1500);
-  };
-
-  // ─── Захват экрана ───────────────────────────────────────────────────────────
+  // ─── Захват экрана ────────────────────────────────────────────────────────
   const startScreenCapture = async () => {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: { mediaSource: 'screen' } });
@@ -118,7 +65,7 @@ const Index = () => {
         await videoRef.current.play();
       }
       stream.getVideoTracks()[0].addEventListener('ended', stopScreenCapture);
-      toast({ title: "Захват экрана запущен", description: "Теперь выберите область для распознавания" });
+      toast({ title: "Захват экрана запущен", description: "Выберите область для распознавания" });
       setTimeout(() => setIsSelectingArea(true), 500);
     } catch {
       toast({ title: "Ошибка захвата", description: "Не удалось начать захват экрана", variant: "destructive" });
@@ -197,12 +144,16 @@ const Index = () => {
     if (totalPixels === 0) return null;
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i], g = data[i + 1], b = data[i + 2];
-      if ((b > 150 && b > r * 1.3 && b > g * 1.1 && g > r * 0.8) ||
-          (b > 120 && g > 100 && b > r * 1.5 && Math.abs(b - g) < 80)) {
+      if (
+        (b > 150 && b > r * 1.3 && b > g * 1.1 && g > r * 0.8) ||
+        (b > 120 && g > 100 && b > r * 1.5 && Math.abs(b - g) < 80)
+      ) {
         cyanScore += b - r;
       }
-      if ((b > 100 && r > 80 && b > g * 1.2 && r > g * 0.9 && Math.abs(r - b) < 100) ||
-          (r > 100 && b > 100 && b > g * 1.3 && r > g * 1.2)) {
+      if (
+        (b > 100 && r > 80 && b > g * 1.2 && r > g * 0.9 && Math.abs(r - b) < 100) ||
+        (r > 100 && b > 100 && b > g * 1.3 && r > g * 1.2)
+      ) {
         purpleScore += (r + b) / 2 - g;
       }
     }
@@ -213,7 +164,7 @@ const Index = () => {
     return result;
   };
 
-  // ─── Recognition loop ────────────────────────────────────────────────────────
+  // ─── Recognition loop ─────────────────────────────────────────────────────
   useEffect(() => {
     if (!isCapturing || !isRunning || isPaused || !captureArea) return;
     let lastExecutionTime = Date.now();
@@ -234,18 +185,18 @@ const Index = () => {
           setTimeout(() => setLastPredictionResult(null), 5000);
 
           const ts = now;
-          setMethodHistory(prev => {
-            const newEntries: MethodPredictionHistory[] = algoResults.map((a, idx) => ({
-              id: ts + idx,
+          setMethodHistory(prev => [
+            ...prev,
+            {
+              id: ts,
               timestamp: new Date(),
-              methodName: a.name,
-              prediction: a.prediction,
+              methodName: 'Pattern Recognition',
+              prediction: previousPrediction,
               actual: detectedColumn,
-              isCorrect: a.prediction === detectedColumn,
-              confidence: a.confidence,
-            }));
-            return [...prev, ...newEntries];
-          });
+              isCorrect: previousPrediction === detectedColumn,
+              confidence: currentPrediction.confidence,
+            }
+          ]);
 
           setPredictionHistory(prev => [...prev, {
             id: ts,
@@ -280,14 +231,14 @@ const Index = () => {
     return () => { if (intervalId) clearInterval(intervalId); };
   }, [isCapturing, isRunning, isPaused, captureArea, previousPrediction]);
 
-  // ─── Timer ───────────────────────────────────────────────────────────────────
+  // ─── Timer ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (isPaused || !isRunning) return;
     const timer = setInterval(() => { setTimeLeft(prev => prev <= 1 ? 30 : prev - 1); }, 1000);
     return () => clearInterval(timer);
   }, [isCapturing, isPaused, isRunning, previousPrediction]);
 
-  // ─── Preview canvas ──────────────────────────────────────────────────────────
+  // ─── Preview canvas ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!isCapturing || !videoRef.current || !previewCanvasRef.current) return;
     let animationId: number;
@@ -322,7 +273,7 @@ const Index = () => {
     return () => { if (animationId) cancelAnimationFrame(animationId); };
   }, [isCapturing, captureArea, isSelectingArea, selectionStart, currentMousePos]);
 
-  // ─── Управление ──────────────────────────────────────────────────────────────
+  // ─── Управление ───────────────────────────────────────────────────────────
   const handleStart = () => {
     if (!isCapturing) { toast({ title: "Сначала запустите захват экрана", variant: "destructive" }); return; }
     if (!captureArea) { toast({ title: "Сначала выберите область", variant: "destructive" }); return; }
@@ -339,7 +290,7 @@ const Index = () => {
     setHistory([]); setRecognizedHistory([]); setCurrentSuccess(null);
     setTimeLeft(30); setCurrentPrediction(null); setPreviousPrediction(null);
     setLastPredictionResult(null); setPredictionHistory([]);
-    setAlgoResults([]); setAiResult(null); setMethodHistory([]);
+    setAiResult(null); setMethodHistory([]);
     setIsPaused(false); setIsRunning(false); setLastRecognizedText('');
     toast({ title: "Система сброшена", description: "Все данные очищены" });
   };
@@ -352,12 +303,11 @@ const Index = () => {
 
   const exportToCSV = () => {
     const csv = [
-      ['№', 'Колонка', 'Время', 'Источник'].join(','),
+      ['№', 'Колонка', 'Время'].join(','),
       ...history.map((e, i) => [
         i + 1,
         e.column === 'alpha' ? 'Альфа' : 'Омега',
         e.timestamp.toLocaleString('ru-RU'),
-        e.source === 'screen' ? 'Захват экрана' : 'Ручной'
       ].join(','))
     ].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -368,32 +318,14 @@ const Index = () => {
     toast({ title: "Экспорт завершен", description: `Сохранено ${history.length} событий` });
   };
 
-  // ─── Вычисляемые данные ───────────────────────────────────────────────────────
+  // ─── Вычисляемые данные ───────────────────────────────────────────────────
   const stats = {
     alpha: history.filter(e => e.column === 'alpha').length,
     omega: history.filter(e => e.column === 'omega').length,
     total: history.length
   };
 
-  const algoColor: Record<string, string> = {
-    'Pattern Recognition': '#0EA5E9',
-    'Frequency Analysis': '#10B981',
-    'Entropy': '#F59E0B',
-  };
-
-  const agreementColors = {
-    full: 'text-green-400',
-    partial: 'text-yellow-400',
-    conflict: 'text-red-400',
-  };
-
-  const agreementLabels = {
-    full: 'Полное единодушие',
-    partial: 'Частичное согласие',
-    conflict: 'Конфликт',
-  };
-
-  // ─── UI ───────────────────────────────────────────────────────────────────────
+  // ─── UI ───────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#1A1F2C] via-[#221F26] to-[#1A1F2C] text-white p-6">
       <video ref={videoRef} className="hidden" />
@@ -406,7 +338,7 @@ const Index = () => {
           <h1 className="text-4xl font-bold bg-gradient-to-r from-[#0EA5E9] via-[#8B5CF6] to-[#D946EF] bg-clip-text text-transparent">
             SUCCESS Predictor
           </h1>
-          <p className="text-gray-400">Pattern Recognition • Frequency Analysis • Entropy • AI</p>
+          <p className="text-gray-400">Pattern Recognition AI</p>
 
           {history.length > 0 && (
             <div className="mt-4 max-w-md mx-auto">
@@ -433,58 +365,84 @@ const Index = () => {
           )}
         </div>
 
-        {/* ── AI Прогноз (главный блок) ────────────────────────────────────────── */}
+        {/* ── AI Прогноз (главный блок) ─────────────────────────────────────── */}
         {aiResult ? (
           <Card className="bg-gradient-to-br from-[#D946EF]/10 via-[#8B5CF6]/10 to-[#0EA5E9]/10 border-[#D946EF]/30 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="bg-gradient-to-br from-[#D946EF] to-[#8B5CF6] p-3 rounded-xl">
+            {/* Шапка */}
+            <div className="flex items-start gap-4 mb-5">
+              <div className="bg-gradient-to-br from-[#D946EF] to-[#8B5CF6] p-3 rounded-xl flex-shrink-0">
                 <Icon name="BrainCircuit" size={28} className="text-white" />
               </div>
-              <div>
-                <h2 className="text-xl font-bold">AI Прогноз</h2>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className={`text-xs font-medium ${agreementColors[aiResult.agreement]}`}>
-                    {agreementLabels[aiResult.agreement]}
-                  </span>
-                </div>
+              <div className="flex-1">
+                <h2 className="text-xl font-bold">AI Прогноз — Pattern Recognition</h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Поиск повторяющихся последовательностей длиной 5–6 в истории
+                </p>
               </div>
-              <div className="ml-auto text-right">
+
+              {/* Следующее значение */}
+              <div className="text-right flex-shrink-0">
                 <div className={`text-3xl font-bold ${aiResult.prediction === 'alpha' ? 'text-[#0EA5E9]' : 'text-[#8B5CF6]'}`}>
                   {aiResult.prediction === 'alpha' ? 'АЛЬФА α' : 'ОМЕГА ω'}
                 </div>
                 <div className="text-gray-400 text-sm">Уверенность: {aiResult.confidence}%</div>
+                <Progress
+                  value={aiResult.confidence}
+                  className="mt-1 h-1.5 w-32 ml-auto"
+                />
               </div>
             </div>
 
-            {/* Веса алгоритмов */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              {(['Pattern Recognition', 'Frequency Analysis', 'Entropy'] as const).map((name, idx) => {
-                const w = [aiResult.weights.pattern, aiResult.weights.frequency, aiResult.weights.entropy][idx];
-                const algo = algoResults.find(a => a.name === name);
-                return (
-                  <div key={name} className="bg-white/5 rounded-lg p-3 border border-white/10">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-gray-400 truncate">
-                        {name === 'Pattern Recognition' ? 'Pattern' : name === 'Frequency Analysis' ? 'Frequency' : 'Entropy'}
-                      </span>
-                      <span className="text-xs font-semibold" style={{ color: algoColor[name] }}>
-                        вес {w}%
-                      </span>
+            {/* Ожидаемый паттерн из 5 */}
+            <div className="bg-black/25 rounded-xl p-4 border border-white/10 mb-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Icon name="TrendingUp" size={15} className="text-[#D946EF]" />
+                <span className="text-xs font-semibold text-[#D946EF] uppercase tracking-wide">
+                  Ожидаемая последовательность (5 шагов)
+                </span>
+                <span className="ml-auto text-xs text-gray-500">~{aiResult.nextPatternConfidence}%</span>
+              </div>
+              <div className="flex items-center gap-2">
+                {aiResult.nextPattern.map((val, idx) => (
+                  <div key={idx} className="flex flex-col items-center gap-1">
+                    <div
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold border-2 transition-all
+                        ${idx === 0
+                          ? val === 'alpha'
+                            ? 'bg-[#0EA5E9]/30 border-[#0EA5E9] text-[#0EA5E9] ring-2 ring-[#0EA5E9]/40'
+                            : 'bg-[#8B5CF6]/30 border-[#8B5CF6] text-[#8B5CF6] ring-2 ring-[#8B5CF6]/40'
+                          : val === 'alpha'
+                            ? 'bg-[#0EA5E9]/10 border-[#0EA5E9]/50 text-[#0EA5E9]/80'
+                            : 'bg-[#8B5CF6]/10 border-[#8B5CF6]/50 text-[#8B5CF6]/80'
+                        }`}
+                    >
+                      {val === 'alpha' ? 'α' : 'ω'}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`text-sm font-bold ${algo?.prediction === 'alpha' ? 'text-[#0EA5E9]' : 'text-[#8B5CF6]'}`}>
-                        {algo ? (algo.prediction === 'alpha' ? 'α' : 'ω') : '—'}
-                      </span>
-                      <span className="text-xs text-gray-500">{algo?.confidence ?? 0}%</span>
-                    </div>
-                    <div className="mt-1.5 h-1 bg-white/10 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all"
-                        style={{ width: `${w}%`, backgroundColor: algoColor[name] }} />
-                    </div>
+                    <span className="text-[10px] text-gray-500">+{idx + 1}</span>
                   </div>
-                );
-              })}
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mt-3">
+                Первый шаг (подсвечен) — текущий прогноз, далее — AI-прогноз цепочки
+              </p>
             </div>
+
+            {/* Найденный паттерн */}
+            {aiResult.matchedPattern && (
+              <div className="bg-black/20 rounded-lg p-3 border border-white/10 mb-4 flex items-center gap-3">
+                <Icon name="ScanSearch" size={16} className="text-[#0EA5E9] flex-shrink-0" />
+                <div>
+                  <span className="text-xs text-gray-400">Найденный паттерн в истории: </span>
+                  <span className="text-sm font-mono font-bold text-white tracking-widest">
+                    [{aiResult.matchedPattern}]
+                  </span>
+                  <span className="text-xs text-gray-400 ml-2">→ предсказывает </span>
+                  <span className={`text-sm font-bold ${aiResult.prediction === 'alpha' ? 'text-[#0EA5E9]' : 'text-[#8B5CF6]'}`}>
+                    {aiResult.prediction === 'alpha' ? 'α' : 'ω'}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Рассуждение AI */}
             <div className="bg-black/20 rounded-lg p-3 border border-white/10 space-y-1">
@@ -493,7 +451,10 @@ const Index = () => {
                 <span className="text-xs font-semibold text-[#D946EF] uppercase tracking-wide">Анализ AI</span>
               </div>
               {aiResult.reasoning.map((line, i) => (
-                <p key={i} className={`text-xs ${i === aiResult.reasoning.length - 1 ? 'text-white font-semibold' : 'text-gray-400'}`}>
+                <p
+                  key={i}
+                  className={`text-xs ${i === aiResult.reasoning.length - 1 ? 'text-white font-semibold' : 'text-gray-400'}`}
+                >
                   {i === aiResult.reasoning.length - 1 ? '→ ' : '• '}{line}
                 </p>
               ))}
@@ -506,74 +467,7 @@ const Index = () => {
           </Card>
         )}
 
-        {/* ── Три алгоритма ────────────────────────────────────────────────────── */}
-        {algoResults.length > 0 && (
-          <div className="grid grid-cols-3 gap-4">
-            {algoResults.map(algo => {
-              const color = algoColor[algo.name] ?? '#8B5CF6';
-              const icon = algo.name === 'Pattern Recognition' ? 'ScanSearch'
-                : algo.name === 'Frequency Analysis' ? 'BarChart2' : 'Waves';
-              return (
-                <Card key={algo.name} className="bg-white/5 border-white/10 p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="p-1.5 rounded-lg" style={{ backgroundColor: color + '22' }}>
-                      <Icon name={icon as 'ScanSearch' | 'BarChart2' | 'Waves'} size={16} style={{ color }} />
-                    </div>
-                    <span className="text-sm font-semibold text-gray-300 truncate">
-                      {algo.name === 'Pattern Recognition' ? 'Pattern Recognition'
-                        : algo.name === 'Frequency Analysis' ? 'Frequency Analysis' : 'Entropy'}
-                    </span>
-                  </div>
-
-                  <div className={`text-2xl font-bold mb-1 ${algo.prediction === 'alpha' ? 'text-[#0EA5E9]' : 'text-[#8B5CF6]'}`}>
-                    {algo.prediction === 'alpha' ? 'α АЛЬФА' : 'ω ОМЕГА'}
-                  </div>
-
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-gray-500">Уверенность</span>
-                    <span className="text-xs font-semibold" style={{ color }}>{algo.confidence}%</span>
-                  </div>
-                  <Progress value={algo.confidence} className="h-1.5 mb-2" />
-
-                  {algo.accuracy > 0 && (
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-gray-500">Точность</span>
-                      <span className={`text-xs font-semibold ${algo.accuracy >= 60 ? 'text-green-400' : algo.accuracy >= 45 ? 'text-yellow-400' : 'text-red-400'}`}>
-                        {algo.accuracy.toFixed(1)}%
-                      </span>
-                    </div>
-                  )}
-
-                  <p className="text-xs text-gray-500 mt-1 leading-tight">{algo.description}</p>
-                </Card>
-              );
-            })}
-          </div>
-        )}
-
-        {/* ── Ручное добавление ────────────────────────────────────────────────── */}
-        <Card className="bg-white/5 border-white/10 p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <Icon name="PlusCircle" size={20} className="text-[#8B5CF6]" />
-            <h3 className="text-lg font-semibold">Добавить вручную</h3>
-          </div>
-          <div className="flex gap-4">
-            <Button
-              onClick={() => handleManualAdd('alpha')}
-              className="flex-1 bg-[#0EA5E9]/20 border border-[#0EA5E9] text-[#0EA5E9] hover:bg-[#0EA5E9]/30 text-lg py-6"
-            >
-              α АЛЬФА
-            </Button>
-            <Button
-              onClick={() => handleManualAdd('omega')}
-              className="flex-1 bg-[#8B5CF6]/20 border border-[#8B5CF6] text-[#8B5CF6] hover:bg-[#8B5CF6]/30 text-lg py-6"
-            >
-              ω ОМЕГА
-            </Button>
-          </div>
-        </Card>
-
-        {/* ── Захват экрана ────────────────────────────────────────────────────── */}
+        {/* ── Захват экрана ─────────────────────────────────────────────────── */}
         <Card className="bg-white/5 border-white/10 p-5">
           <div className="flex items-center gap-3 mb-4">
             <Icon name="Monitor" size={20} className="text-[#0EA5E9]" />
@@ -630,7 +524,7 @@ const Index = () => {
           <Card className="bg-blue-500/10 border-blue-500/30 p-4">
             <div className="flex items-center gap-3">
               <Icon name="Info" size={20} className="text-blue-400" />
-              <span className="text-blue-400 font-semibold">Шаг 1: Нажмите "Начать захват экрана" или добавьте события вручную</span>
+              <span className="text-blue-400 font-semibold">Шаг 1: Нажмите "Начать захват экрана"</span>
             </div>
           </Card>
         )}
@@ -712,12 +606,14 @@ const Index = () => {
                     {lastPredictionResult === 'correct' ? 'Прогноз совпал!' : 'Прогноз не совпал'}
                   </h3>
                   <p className="text-gray-400 mt-1">
-                    AI предсказал: <Badge className={`${previousPrediction === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none ml-2`}>
+                    AI предсказал:{' '}
+                    <Badge className={`${previousPrediction === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none ml-2`}>
                       {previousPrediction === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
                     </Badge>
                   </p>
                   <p className="text-gray-400 mt-1">
-                    Факт: <Badge className={`${history[history.length - 1]?.column === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none ml-2`}>
+                    Факт:{' '}
+                    <Badge className={`${history[history.length - 1]?.column === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none ml-2`}>
                       {history[history.length - 1]?.column === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
                     </Badge>
                   </p>
@@ -733,7 +629,7 @@ const Index = () => {
           <Card className="bg-white/5 border-white/10 p-6">
             <div className="flex items-center gap-3 mb-4">
               <Icon name="TrendingUp" size={24} className="text-[#0EA5E9]" />
-              <h3 className="text-xl font-bold">Статистика AI прогнозов</h3>
+              <h3 className="text-xl font-bold">Статистика прогнозов</h3>
             </div>
             <div className="grid grid-cols-4 gap-4">
               <div className="bg-white/5 rounded-lg p-4 border border-white/10">
@@ -756,32 +652,8 @@ const Index = () => {
               </div>
             </div>
 
-            {/* Точность по алгоритмам */}
-            {methodHistory.length > 0 && (
-              <div className="mt-4 grid grid-cols-3 gap-3">
-                {(['Pattern Recognition', 'Frequency Analysis', 'Entropy'] as const).map(name => {
-                  const preds = methodHistory.filter(m => m.methodName === name);
-                  if (preds.length === 0) return null;
-                  const correct = preds.filter(p => p.isCorrect).length;
-                  const acc = (correct / preds.length) * 100;
-                  const color = algoColor[name];
-                  return (
-                    <div key={name} className="bg-white/5 rounded-lg p-3 border border-white/10">
-                      <div className="text-xs text-gray-400 mb-1">
-                        {name === 'Pattern Recognition' ? 'Pattern' : name === 'Frequency Analysis' ? 'Frequency' : 'Entropy'}
-                      </div>
-                      <div className="text-xl font-bold" style={{ color }}>
-                        {acc.toFixed(1)}%
-                      </div>
-                      <div className="text-xs text-gray-500">{correct}/{preds.length}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
             <div className="mt-4 flex items-center gap-2">
-              <span className="text-gray-400 text-sm">Последние 5 AI:</span>
+              <span className="text-gray-400 text-sm">Последние 5:</span>
               <div className="flex gap-2">
                 {predictionHistory.slice(-5).map((p) => (
                   <div key={p.id} className={`w-9 h-9 rounded-lg flex items-center justify-center ${p.isCorrect ? 'bg-green-500/20 border border-green-500' : 'bg-red-500/20 border border-red-500'}`}>
@@ -842,7 +714,7 @@ const Index = () => {
               {history.slice(-10).reverse().map((event) => (
                 <Badge key={event.id} variant="outline"
                   className={`${event.column === 'alpha' ? 'border-[#0EA5E9] text-[#0EA5E9] bg-[#0EA5E9]/10' : 'border-[#8B5CF6] text-[#8B5CF6] bg-[#8B5CF6]/10'} text-xs`}>
-                  {event.column === 'alpha' ? 'α' : 'ω'}{event.source === 'screen' && '📹'}
+                  {event.column === 'alpha' ? 'α' : 'ω'}
                 </Badge>
               ))}
             </div>
@@ -856,7 +728,7 @@ const Index = () => {
             <h3 className="text-xl font-bold">История событий</h3>
             {predictionHistory.length > 0 && (
               <Badge className="bg-[#8B5CF6]/20 text-[#8B5CF6] border-none">
-                AI точность: {((predictionHistory.filter(p => p.isCorrect).length / predictionHistory.length) * 100).toFixed(1)}%
+                Точность: {((predictionHistory.filter(p => p.isCorrect).length / predictionHistory.length) * 100).toFixed(1)}%
               </Badge>
             )}
           </div>
@@ -888,12 +760,7 @@ const Index = () => {
                           </>
                         )}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className="text-xs border-white/20 text-gray-400">
-                          {event.source === 'screen' ? '📹 Авто' : '✋ Ручной'}
-                        </Badge>
-                        <span className="text-xs text-gray-500">{event.timestamp.toLocaleTimeString('ru-RU')}</span>
-                      </div>
+                      <span className="text-xs text-gray-500">{event.timestamp.toLocaleTimeString('ru-RU')}</span>
                     </div>
                   </div>
                 );
@@ -902,7 +769,7 @@ const Index = () => {
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-gray-500">
               <Icon name="History" size={48} className="mb-4 opacity-30" />
-              <p>История пуста — добавьте события или запустите захват экрана</p>
+              <p>История пуста — запустите захват экрана</p>
             </div>
           )}
         </Card>
