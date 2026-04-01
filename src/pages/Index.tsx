@@ -142,24 +142,38 @@ const Index = () => {
     let purpleScore = 0;
     const totalPixels = width * height;
     if (totalPixels === 0) return null;
+
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i], g = data[i + 1], b = data[i + 2];
-      if (
-        (b > 150 && b > r * 1.3 && b > g * 1.1 && g > r * 0.8) ||
-        (b > 120 && g > 100 && b > r * 1.5 && Math.abs(b - g) < 80)
-      ) {
-        cyanScore += b - r;
+
+      // Альфа (голубой/cyan): B доминирует, R низкий, G средний
+      // Ключевое условие: B значительно выше R, и R низкий (не фиолетовый!)
+      const isCyan =
+        (b > 140 && r < 100 && b > r * 2.0 && b > g * 0.9) ||
+        (b > 120 && g > 80 && r < 80 && b > r * 2.5);
+
+      // Омега (фиолетовый/purple): R и B высокие, G низкий
+      // Ключевое условие: R высокий (это отличает фиолетовый от голубого)
+      const isPurple =
+        (r > 100 && b > 100 && r > g * 1.5 && b > g * 1.5 && Math.abs(r - b) < 80) ||
+        (r > 120 && b > 120 && g < 100 && r > g * 1.3);
+
+      if (isCyan) {
+        cyanScore += (b - r);
       }
-      if (
-        (b > 100 && r > 80 && b > g * 1.2 && r > g * 0.9 && Math.abs(r - b) < 100) ||
-        (r > 100 && b > 100 && b > g * 1.3 && r > g * 1.2)
-      ) {
+      if (isPurple) {
         purpleScore += (r + b) / 2 - g;
       }
     }
-    const threshold = 300;
-    if (cyanScore < threshold && purpleScore < threshold) return null;
-    const result = cyanScore > purpleScore ? 'alpha' : 'omega';
+
+    // Нормализуем по количеству пикселей для честного сравнения
+    const normalizedCyan = cyanScore / totalPixels;
+    const normalizedPurple = purpleScore / totalPixels;
+
+    const threshold = 0.5;
+    if (normalizedCyan < threshold && normalizedPurple < threshold) return null;
+
+    const result = normalizedCyan > normalizedPurple ? 'alpha' : 'omega';
     setLastRecognizedText(result === 'alpha' ? 'АЛЬФА (голубой)' : 'ОМЕГА (фиолетовый)');
     return result;
   };

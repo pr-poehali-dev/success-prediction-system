@@ -200,8 +200,8 @@ export const ScreenCaptureSection = ({
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
 
-    let totalBlue = 0;
-    let totalPurple = 0;
+    let cyanScore = 0;
+    let purpleScore = 0;
     const pixelCount = data.length / 4;
 
     for (let i = 0; i < data.length; i += 4) {
@@ -209,26 +209,34 @@ export const ScreenCaptureSection = ({
       const g = data[i + 1];
       const b = data[i + 2];
 
-      const blueScore = b - (r + g) / 2;
-      if (blueScore > 30) {
-        totalBlue++;
-      }
+      // Альфа (голубой/cyan): B высокий, R низкий — R низкий отличает от фиолетового!
+      const isCyan =
+        (b > 140 && r < 100 && b > r * 2.0 && b > g * 0.9) ||
+        (b > 120 && g > 80 && r < 80 && b > r * 2.5);
 
-      const purpleScore = (r + b) / 2 - g;
-      if (purpleScore > 30 && r > 100) {
-        totalPurple++;
+      // Омега (фиолетовый): R и B высокие, G низкий — R высокий ключевое отличие!
+      const isPurple =
+        (r > 100 && b > 100 && r > g * 1.5 && b > g * 1.5 && Math.abs(r - b) < 80) ||
+        (r > 120 && b > 120 && g < 100 && r > g * 1.3);
+
+      if (isCyan) {
+        cyanScore += (b - r);
+      }
+      if (isPurple) {
+        purpleScore += (r + b) / 2 - g;
       }
     }
 
-    const bluePercent = (totalBlue / pixelCount) * 100;
-    const purplePercent = (totalPurple / pixelCount) * 100;
+    // Нормализуем по количеству пикселей
+    const normalizedCyan = cyanScore / pixelCount;
+    const normalizedPurple = purpleScore / pixelCount;
 
     let detectedColumn: Column | null = null;
 
-    if (bluePercent > 5 && bluePercent > purplePercent) {
+    if (normalizedCyan > 0.5 && normalizedCyan > normalizedPurple) {
       detectedColumn = 'alpha';
       setLastRecognizedText('Альфа');
-    } else if (purplePercent > 5) {
+    } else if (normalizedPurple > 0.5) {
       detectedColumn = 'omega';
       setLastRecognizedText('Омега');
     }
