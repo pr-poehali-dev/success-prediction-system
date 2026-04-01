@@ -67,7 +67,7 @@ const Index = () => {
     reasoning: string[];
   };
 
-  // ─── Поиск лучшего паттерна длиной len в конце истории ────────────────────
+  // ─── Поиск паттерна строго длиной 4 в конце истории → прогноз 5-го ─────────
   const findPatternStats = (hist: Column[], len: number): { alphaCount: number; omegaCount: number; key: string } | null => {
     if (hist.length < len + 1) return null;
     const key = hist.slice(-len).join('-');
@@ -95,77 +95,86 @@ const Index = () => {
     const total = alphaCnt + omegaCnt;
     const symbols = patternKey.split('-').map(s => s === 'alpha' ? 'α' : 'ω').join('');
 
-    // 1. Описание паттерна
+    // 1. Описание паттерна из 4 событий
     const patternType = (() => {
       const parts = patternKey.split('-');
       if (parts.every(p => p === parts[0])) return `серия из ${patternLen} одинаковых (${symbols})`;
       const alternating = parts.every((p, i) => i === 0 || p !== parts[i - 1]);
       if (alternating) return `чередование (${symbols})`;
-      return `смешанный паттерн (${symbols})`;
+      // Более детальное описание смешанного
+      const alphaInPattern = parts.filter(p => p === 'alpha').length;
+      const omegaInPattern = parts.filter(p => p === 'omega').length;
+      if (alphaInPattern > omegaInPattern) return `α-доминирующий (${symbols})`;
+      if (omegaInPattern > alphaInPattern) return `ω-доминирующий (${symbols})`;
+      return `равный паттерн (${symbols})`;
     })();
 
-    lines.push(`Последние ${patternLen} событий образуют ${patternType}.`);
+    lines.push(`Паттерн из 4 событий: ${patternType}.`);
 
-    // 2. Статистика по паттерну
+    // 2. Статистика: сколько раз после этих 4 выпадало 5-е
     if (total > 0) {
       const dominantLabel = alphaCnt >= omegaCnt ? 'α (Альфа)' : 'ω (Омега)';
       const pct = Math.round(Math.max(alphaCnt, omegaCnt) / total * 100);
-      if (total >= 3) {
-        lines.push(`В истории этот паттерн встречался ${total} раз — после него ${dominantLabel} выпадало в ${pct}% случаев.`);
+      if (total >= 5) {
+        lines.push(`Этот паттерн встречался ${total} раз — 5-е событие: ${dominantLabel} в ${pct}% случаев (α:${alphaCnt} / ω:${omegaCnt}).`);
+      } else if (total >= 2) {
+        lines.push(`Паттерн встречался ${total} раза — 5-е событие: ${dominantLabel} в ${pct}% (α:${alphaCnt} / ω:${omegaCnt}). Статистика ограничена.`);
       } else {
-        lines.push(`Паттерн редкий (${total} вхождений в истории), статистика ограничена.`);
+        lines.push(`Паттерн встречался 1 раз — после него выпало ${alphaCnt > 0 ? 'α' : 'ω'}. Данных мало, прогноз предварительный.`);
       }
     }
 
-    // 3. Баланс α/ω
+    // 3. Баланс α/ω по всей истории
     const currentAlpha = hist.filter(c => c === 'alpha').length;
     const currentOmega = hist.filter(c => c === 'omega').length;
     if (Math.abs(imbalance) >= 5) {
       const dominant = imbalance > 0 ? 'α' : 'ω';
       const minority = imbalance > 0 ? 'ω' : 'α';
-      lines.push(`Сильный дисбаланс: ${dominant} выпадало ${Math.max(currentAlpha, currentOmega)} раз, ${minority} — ${Math.min(currentAlpha, currentOmega)}. Система тяготеет к выравниванию.`);
+      lines.push(`Сильный дисбаланс: ${dominant} ведёт на ${Math.abs(imbalance)} (α:${currentAlpha} ω:${currentOmega}). Коррекция в сторону ${minority}.`);
     } else if (Math.abs(imbalance) >= 2) {
       const dominant = imbalance > 0 ? 'α' : 'ω';
-      lines.push(`Небольшой перевес в сторону ${dominant} (разница ${Math.abs(imbalance)}). Это учтено в прогнозе.`);
+      lines.push(`Небольшой перевес ${dominant} (разница ${Math.abs(imbalance)}). Учтено в весе прогноза.`);
     } else {
-      lines.push(`Баланс α/ω близок к 50/50 (α:${currentAlpha} ω:${currentOmega}) — паттерн получает максимальный вес.`);
+      lines.push(`Баланс α/ω близок к 50/50 (α:${currentAlpha} ω:${currentOmega}) — паттерн имеет максимальный вес.`);
     }
 
-    // 4. Итог
+    // 4. Анализ последних 10 событий для контекста тренда
+    if (hist.length >= 10) {
+      const last10 = hist.slice(-10);
+      const last10Alpha = last10.filter(c => c === 'alpha').length;
+      const last10Omega = 10 - last10Alpha;
+      if (last10Alpha >= 7) {
+        lines.push(`Последние 10 событий: α доминирует (${last10Alpha}/10). Возможен сдвиг к ω.`);
+      } else if (last10Omega >= 7) {
+        lines.push(`Последние 10 событий: ω доминирует (${last10Omega}/10). Возможен сдвиг к α.`);
+      }
+    }
+
+    // 5. Итог
     const predLabel = finalPred === 'alpha' ? 'АЛЬФА (α)' : 'ОМЕГА (ω)';
-    lines.push(`Итог: прогноз — ${predLabel}.`);
+    lines.push(`Итог: 5-е событие → ${predLabel}.`);
 
     return lines;
   };
 
-  // ─── Основной прогноз: лучший паттерн длиной 3, 4 или 5 + баланс ─────────
+  // ─── Основной прогноз: строго паттерн длиной 4 → прогноз 5-го ──────────────
   const computePrediction = (hist: Column[]): PredictionResult | null => {
-    if (hist.length < 4) return null;
+    if (hist.length < 5) return null;
 
     const currentAlpha = hist.filter(c => c === 'alpha').length;
     const currentOmega = hist.filter(c => c === 'omega').length;
     const imbalance = currentAlpha - currentOmega;
 
-    // Ищем лучший паттерн: приоритет длинным (5 > 4 > 3), с максимальной уверенностью
-    let bestPattern: { key: string; len: number; alphaCount: number; omegaCount: number; confidence: number } | null = null;
-
-    for (const len of [5, 4, 3]) {
-      const stats = findPatternStats(hist, len);
-      if (!stats) continue;
-      const { alphaCount, omegaCount, key } = stats;
-      const total = alphaCount + omegaCount;
-      if (total === 0) continue;
-      const conf = (Math.max(alphaCount, omegaCount) / total) * 100;
-      // Принимаем если встречался хоть раз и уверенность > 50%
-      if (conf >= 50 && (!bestPattern || conf > bestPattern.confidence || (conf === bestPattern.confidence && len > bestPattern.len))) {
-        bestPattern = { key, len, alphaCount, omegaCount, confidence: conf };
-      }
-    }
-
-    if (!bestPattern) return null;
-
-    const { key, len, alphaCount, omegaCount } = bestPattern;
+    // Паттерн строго длиной 4: последние 4 события → предсказываем 5-е
+    const stats4 = findPatternStats(hist, 4);
+    if (!stats4) return null;
+    const { alphaCount, omegaCount, key } = stats4;
     const total = alphaCount + omegaCount;
+    if (total === 0) return null;
+    const conf = (Math.max(alphaCount, omegaCount) / total) * 100;
+
+    const bestPattern = { key, len: 4, alphaCount, omegaCount, confidence: conf };
+
     const alphaProb = (alphaCount / total) * 100;
     const omegaProb = (omegaCount / total) * 100;
     const patternPrediction: Column = alphaCount >= omegaCount ? 'alpha' : 'omega';
@@ -194,7 +203,7 @@ const Index = () => {
       strategyName = `Паттерн [${symbols}] → следующий`;
     }
 
-    const reasoning = buildReasoning(hist, key, len, alphaCount, omegaCount, imbalance, finalPrediction);
+    const reasoning = buildReasoning(hist, key, bestPattern.len, alphaCount, omegaCount, imbalance, finalPrediction);
 
     return {
       column: finalPrediction,
@@ -209,38 +218,180 @@ const Index = () => {
     };
   };
 
-  // ─── Топ-5 паттернов (длина 3–5, по всей истории) ─────────────────────────
+  // ─── Топ-5 паттернов строго длиной 5 (4 события + 5-е прогнозное) ──────────
   const getTopPatterns = (hist: Column[]) => {
-    if (hist.length < 4) return [];
+    if (hist.length < 6) return []; // нужно минимум 6: 4 паттерн + 1 исход + хоть раз повторился
 
-    const map = new Map<string, { nextAlpha: number; nextOmega: number; len: number }>();
-    for (const len of [3, 4, 5]) {
-      for (let i = 0; i <= hist.length - len - 1; i++) {
-        const key = hist.slice(i, i + len).join('-');
-        const next = hist[i + len];
-        if (!map.has(key)) map.set(key, { nextAlpha: 0, nextOmega: 0, len });
-        const d = map.get(key)!;
-        if (next === 'alpha') d.nextAlpha++; else d.nextOmega++;
-      }
+    const map = new Map<string, { nextAlpha: number; nextOmega: number }>();
+    // Ищем паттерны ровно длиной 4, смотрим что идёт 5-м
+    const len = 4;
+    for (let i = 0; i <= hist.length - len - 1; i++) {
+      const key = hist.slice(i, i + len).join('-');
+      const next = hist[i + len];
+      if (!map.has(key)) map.set(key, { nextAlpha: 0, nextOmega: 0 });
+      const d = map.get(key)!;
+      if (next === 'alpha') d.nextAlpha++; else d.nextOmega++;
     }
 
     return Array.from(map.entries())
-      .filter(([, d]) => d.nextAlpha + d.nextOmega >= 2)
+      .filter(([, d]) => d.nextAlpha + d.nextOmega >= 1)
       .map(([pattern, d]) => {
         const total = d.nextAlpha + d.nextOmega;
         const conf = (Math.max(d.nextAlpha, d.nextOmega) / total) * 100;
+        const prediction = d.nextAlpha >= d.nextOmega ? 'alpha' as Column : 'omega' as Column;
         return {
           pattern,
           total,
           nextAlpha: d.nextAlpha,
           nextOmega: d.nextOmega,
-          prediction: d.nextAlpha >= d.nextOmega ? 'alpha' as Column : 'omega' as Column,
+          prediction,
           confidence: conf,
-          len: d.len
+          len: 4 // паттерн всегда 4 события
         };
       })
-      .sort((a, b) => b.confidence - a.confidence || b.total - a.total)
+      .sort((a, b) => {
+        // Сортировка: сначала уверенность, затем количество вхождений
+        const scoreDiff = b.confidence - a.confidence;
+        if (Math.abs(scoreDiff) > 1) return scoreDiff;
+        return b.total - a.total;
+      })
       .slice(0, 5);
+  };
+
+  // ─── Аналитическое мышление: глубокий анализ всей истории событий ───────────
+  const computeDeepAnalytics = (hist: Column[]) => {
+    if (hist.length < 5) return null;
+
+    const total = hist.length;
+    const alphaCount = hist.filter(c => c === 'alpha').length;
+    const omegaCount = hist.filter(c => c === 'omega').length;
+    const alphaRatio = alphaCount / total;
+    const omegaRatio = omegaCount / total;
+    const imbalance = alphaCount - omegaCount;
+
+    // 1. Серии (стрики) — максимальная и текущая
+    let maxStreakAlpha = 0, maxStreakOmega = 0;
+    let curStreak = 1;
+    for (let i = 1; i < hist.length; i++) {
+      if (hist[i] === hist[i - 1]) {
+        curStreak++;
+        if (hist[i] === 'alpha' && curStreak > maxStreakAlpha) maxStreakAlpha = curStreak;
+        if (hist[i] === 'omega' && curStreak > maxStreakOmega) maxStreakOmega = curStreak;
+      } else {
+        curStreak = 1;
+      }
+    }
+    if (maxStreakAlpha === 0) maxStreakAlpha = hist.filter(c => c === 'alpha').length > 0 ? 1 : 0;
+    if (maxStreakOmega === 0) maxStreakOmega = hist.filter(c => c === 'omega').length > 0 ? 1 : 0;
+
+    // Текущая серия
+    let currentStreakLen = 1;
+    const currentStreakType = hist[hist.length - 1];
+    for (let i = hist.length - 2; i >= 0; i--) {
+      if (hist[i] === currentStreakType) currentStreakLen++;
+      else break;
+    }
+
+    // 2. Энтропия (мера случайности) на последних 20 событиях
+    const window20 = hist.slice(-20);
+    let transitions = 0;
+    for (let i = 1; i < window20.length; i++) {
+      if (window20[i] !== window20[i - 1]) transitions++;
+    }
+    const entropyScore = window20.length > 1 ? (transitions / (window20.length - 1)) * 100 : 50;
+
+    // 3. Тренд последних 10 vs предыдущих 10
+    const recent10Alpha = hist.slice(-10).filter(c => c === 'alpha').length;
+    const prev10Alpha = hist.length >= 20 ? hist.slice(-20, -10).filter(c => c === 'alpha').length : null;
+    let trendLabel = '';
+    let trendDirection: 'alpha' | 'omega' | 'neutral' = 'neutral';
+    if (prev10Alpha !== null) {
+      const diff = recent10Alpha - prev10Alpha;
+      if (diff > 2) { trendLabel = `Рост α: +${diff} в последних 10`; trendDirection = 'alpha'; }
+      else if (diff < -2) { trendLabel = `Рост ω: +${Math.abs(diff)} в последних 10`; trendDirection = 'omega'; }
+      else trendLabel = 'Стабильное чередование без выраженного тренда';
+    } else {
+      const r = recent10Alpha;
+      if (r >= 7) { trendLabel = `Доминирование α в последних 10 (${r}/10)`; trendDirection = 'alpha'; }
+      else if (r <= 3) { trendLabel = `Доминирование ω в последних 10 (${10 - r}/10)`; trendDirection = 'omega'; }
+      else trendLabel = 'Равномерное чередование';
+    }
+
+    // 4. Паттерн чередования: считаем чередования α-ω-α-ω и повторения α-α, ω-ω
+    let alternations = 0, repetitions = 0;
+    for (let i = 1; i < hist.length; i++) {
+      if (hist[i] !== hist[i - 1]) alternations++;
+      else repetitions++;
+    }
+    const altRatio = hist.length > 1 ? (alternations / (hist.length - 1)) * 100 : 50;
+
+    // 5. Ключевые выводы
+    const insights: string[] = [];
+
+    // Баланс
+    if (Math.abs(imbalance) <= 2) {
+      insights.push(`✅ Идеальный баланс α/ω: ${alphaCount}/${omegaCount} (отклонение ${Math.abs(imbalance)}). Система равновесна.`);
+    } else if (Math.abs(imbalance) <= 5) {
+      const dominant = imbalance > 0 ? 'α' : 'ω';
+      const minority = imbalance > 0 ? 'ω' : 'α';
+      insights.push(`⚠️ Умеренный дисбаланс: ${dominant} ведёт на ${Math.abs(imbalance)}. Ожидается коррекция в сторону ${minority}.`);
+    } else {
+      const dominant = imbalance > 0 ? 'α' : 'ω';
+      const minority = imbalance > 0 ? 'ω' : 'α';
+      insights.push(`🔴 Сильный дисбаланс: ${dominant} ведёт на ${Math.abs(imbalance)} (${(Math.max(alphaRatio, omegaRatio) * 100).toFixed(0)}%). Система будет корректировать в ${minority}.`);
+    }
+
+    // Тренд
+    insights.push(`📈 Тренд: ${trendLabel}.`);
+
+    // Чередование
+    if (altRatio > 65) {
+      insights.push(`🔀 Высокое чередование (${altRatio.toFixed(0)}%): система часто переключается α↔ω. Ожидай смену после текущего.`);
+    } else if (altRatio < 40) {
+      insights.push(`🔁 Низкое чередование (${altRatio.toFixed(0)}%): доминируют повторения. Текущая серия склонна продолжаться.`);
+    } else {
+      insights.push(`↔️ Умеренное чередование (${altRatio.toFixed(0)}%): смешанный режим без явного паттерна серий.`);
+    }
+
+    // Текущая серия
+    if (currentStreakLen >= 3) {
+      insights.push(`⚡ Активная серия: ${currentStreakLen} подряд «${currentStreakType === 'alpha' ? 'α' : 'ω'}». Исторически серии ${currentStreakLen}+ обрываются в ${(altRatio).toFixed(0)}% случаев.`);
+    } else if (currentStreakLen === 2) {
+      insights.push(`➡️ Текущая серия: 2 подряд «${currentStreakType === 'alpha' ? 'α' : 'ω'}». Умеренная вероятность продолжения.`);
+    }
+
+    // Энтропия
+    if (entropyScore > 70) {
+      insights.push(`🎲 Высокая случайность последних 20 событий (${entropyScore.toFixed(0)}% переходов). Прогноз по паттерну менее надёжен.`);
+    } else if (entropyScore < 40) {
+      insights.push(`🎯 Низкая случайность (${entropyScore.toFixed(0)}% переходов в последних 20). Паттерны стабильны — прогноз надёжнее.`);
+    } else {
+      insights.push(`📊 Умеренная случайность событий (${entropyScore.toFixed(0)}% переходов). Паттерны работают в обычном режиме.`);
+    }
+
+    // Максимальные серии
+    if (maxStreakAlpha > 3 || maxStreakOmega > 3) {
+      const dominant = maxStreakAlpha >= maxStreakOmega ? `α (макс. ${maxStreakAlpha})` : `ω (макс. ${maxStreakOmega})`;
+      insights.push(`📌 В истории замечены длинные серии: ${dominant}. Это типично для этой последовательности.`);
+    }
+
+    // Объём данных
+    if (total < 15) {
+      insights.push(`ℹ️ Малый объём данных (${total} событий). Выводы предварительные — нужно больше событий для точного прогноза.`);
+    } else if (total >= 50) {
+      insights.push(`💡 Большой объём данных (${total} событий) — статистика высокодостоверна.`);
+    }
+
+    return {
+      total, alphaCount, omegaCount, alphaRatio, omegaRatio, imbalance,
+      maxStreakAlpha, maxStreakOmega,
+      currentStreakLen, currentStreakType,
+      entropyScore, altRatio, alternations, repetitions,
+      trendLabel, trendDirection,
+      insights,
+      recent10Alpha,
+      prev10Alpha
+    };
   };
 
   // ─── Захват экрана ──────────────────────────────────────────────────────────
@@ -496,6 +647,7 @@ const Index = () => {
 
   const topPatterns = getTopPatterns(recognizedHistory);
   const adaptivePred = computePrediction(recognizedHistory);
+  const deepAnalytics = computeDeepAnalytics(recognizedHistory);
 
   // ─── UI ──────────────────────────────────────────────────────────────────────
   return (
@@ -510,8 +662,8 @@ const Index = () => {
           <h1 className="text-4xl font-bold bg-gradient-to-r from-[#0EA5E9] via-[#8B5CF6] to-[#D946EF] bg-clip-text text-transparent">
             SUCCESS Predictor
           </h1>
-          <p className="text-gray-400">Анализ паттернов • Баланс 50/50</p>
-          <p className="text-sm text-gray-500">Паттерн: 4 события → прогноз 5-го</p>
+          <p className="text-gray-400">Анализ паттернов • Баланс 50/50 • Аналитика истории</p>
+          <p className="text-sm text-gray-500">Паттерн: 4 события → 5-е прогнозное</p>
 
           {history.length > 0 && (
             <div className="mt-4 max-w-md mx-auto">
@@ -625,52 +777,57 @@ const Index = () => {
                 <Icon name="Sparkles" size={32} className="text-white" />
               </div>
               <h2 className="text-2xl font-bold mb-2">Прогноз</h2>
-              <p className="text-gray-400 text-center">Накопите минимум 4 события для первого прогноза</p>
+              <p className="text-gray-400 text-center">Накопите минимум 5 событий для первого прогноза (паттерн 4 → 5-е)</p>
             </div>
           )}
         </Card>
 
-        {/* Топ-5 паттернов */}
+        {/* Топ-5 паттернов (строго 4 события + 5-е прогнозное) */}
         <Card className="bg-white/5 border-white/10 p-6">
           {topPatterns.length > 0 ? (
             <>
-              <div className="flex items-center gap-3 mb-4">
+              <div className="flex items-center gap-3 mb-4 flex-wrap">
                 <Icon name="Database" size={24} className="text-[#0EA5E9]" />
                 <h3 className="text-xl font-bold">Топ-5 паттернов</h3>
                 <Badge className="bg-[#0EA5E9]/20 text-[#0EA5E9] border-none">{topPatterns.length} найдено</Badge>
-                <span className="text-gray-500 text-xs">(паттерн 3–5 событий → следующий)</span>
+                <span className="text-gray-500 text-xs">4 события → 5-е прогнозное</span>
               </div>
               <div className="space-y-3">
                 {topPatterns.map((seq, idx) => {
                   const isActive = adaptivePred && seq.pattern === adaptivePred.pattern;
                   return (
                     <div key={idx} className={`bg-white/5 rounded-lg p-4 border ${isActive ? 'border-[#D946EF] bg-[#D946EF]/10' : 'border-white/10'}`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-3 flex-wrap">
                           <Badge className="bg-gradient-to-r from-[#0EA5E9] to-[#8B5CF6] text-white border-none px-3">#{idx + 1}</Badge>
+                          {/* 4 события паттерна */}
                           <div className="flex items-center gap-1">
                             {seq.pattern.split('-').map((s, i) => (
-                              <Badge key={i} className={`${s === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none font-bold`}>
+                              <Badge key={i} className={`${s === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none font-bold text-sm px-2`}>
                                 {s === 'alpha' ? 'α' : 'ω'}
                               </Badge>
                             ))}
-                            <span className="text-gray-500 mx-1">→</span>
-                            <Badge className={`${seq.prediction === 'alpha' ? 'bg-[#0EA5E9]/30 text-[#0EA5E9] border-[#0EA5E9]' : 'bg-[#8B5CF6]/30 text-[#8B5CF6] border-[#8B5CF6]'} border font-bold`}>
+                            <span className="text-gray-500 mx-1 font-bold">→</span>
+                            {/* 5-е прогнозное */}
+                            <Badge className={`${seq.prediction === 'alpha' ? 'bg-[#0EA5E9]/30 text-[#0EA5E9] border-[#0EA5E9]' : 'bg-[#8B5CF6]/30 text-[#8B5CF6] border-[#8B5CF6]'} border-2 font-bold text-sm px-2 ring-2 ring-offset-1 ring-offset-transparent ${seq.prediction === 'alpha' ? 'ring-[#0EA5E9]/40' : 'ring-[#8B5CF6]/40'}`}>
                               {seq.prediction === 'alpha' ? 'α' : 'ω'}
                             </Badge>
+                            <span className="text-gray-500 text-xs ml-1">(5-е)</span>
                           </div>
-                          <span className="text-gray-400 text-sm">встречался: <span className="text-white font-semibold">{seq.total}×</span></span>
-                          <span className="text-gray-400 text-sm">уверенность: <span className="text-white font-semibold">{seq.confidence.toFixed(0)}%</span></span>
+                          <div className="flex gap-3 text-sm">
+                            <span className="text-gray-400">встречался: <span className="text-white font-semibold">{seq.total}×</span></span>
+                            <span className="text-gray-400">уверенность: <span className={`font-bold ${seq.confidence >= 70 ? 'text-green-400' : seq.confidence >= 55 ? 'text-yellow-400' : 'text-orange-400'}`}>{seq.confidence.toFixed(0)}%</span></span>
+                          </div>
                         </div>
                         <div className="flex gap-3 text-xs text-gray-400">
-                          <span>α:{seq.nextAlpha}</span>
-                          <span>ω:{seq.nextOmega}</span>
+                          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-[#0EA5E9]" />α:{seq.nextAlpha}</span>
+                          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-[#8B5CF6]" />ω:{seq.nextOmega}</span>
                         </div>
                       </div>
                       {isActive && (
                         <div className="mt-2 pt-2 border-t border-[#D946EF]/30 flex items-center gap-2">
                           <Icon name="Sparkles" size={14} className="text-[#D946EF]" />
-                          <span className="text-[#D946EF] text-sm font-semibold">Активный паттерн для прогноза</span>
+                          <span className="text-[#D946EF] text-sm font-semibold">🎯 Активный паттерн — используется для прогноза</span>
                         </div>
                       )}
                       <Progress value={seq.confidence} className="h-1 mt-3" />
@@ -683,10 +840,106 @@ const Index = () => {
             <div className="flex flex-col items-center justify-center py-8">
               <Icon name="Database" size={48} className="text-[#0EA5E9] mb-4" />
               <h3 className="text-xl font-bold mb-2">Топ-5 паттернов</h3>
-              <p className="text-gray-400 text-center">Нужно больше данных для анализа паттернов</p>
+              <p className="text-gray-400 text-center">Нужно минимум 6 событий для анализа паттернов (4 + исход + повторение)</p>
             </div>
           )}
         </Card>
+
+        {/* Аналитическое мышление — глубокий анализ всей истории */}
+        {deepAnalytics && (
+          <Card className="bg-gradient-to-br from-[#0EA5E9]/5 via-[#8B5CF6]/5 to-[#D946EF]/5 border-[#8B5CF6]/30 p-6">
+            <div className="flex items-center gap-3 mb-5">
+              <div className="bg-gradient-to-br from-[#8B5CF6] to-[#D946EF] p-3 rounded-xl">
+                <Icon name="BrainCircuit" size={24} className="text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold">Аналитика всей истории</h3>
+                <p className="text-gray-400 text-sm">Глубокий анализ {deepAnalytics.total} событий</p>
+              </div>
+            </div>
+
+            {/* Метрики */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+              <div className="bg-white/5 rounded-lg p-3 border border-white/10 text-center">
+                <div className="text-xs text-gray-400 mb-1">Всего событий</div>
+                <div className="text-2xl font-bold text-white">{deepAnalytics.total}</div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-3 border border-[#0EA5E9]/20 text-center">
+                <div className="text-xs text-gray-400 mb-1">α / ω</div>
+                <div className="text-2xl font-bold">
+                  <span className="text-[#0EA5E9]">{deepAnalytics.alphaCount}</span>
+                  <span className="text-gray-500 text-lg"> / </span>
+                  <span className="text-[#8B5CF6]">{deepAnalytics.omegaCount}</span>
+                </div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-3 border border-white/10 text-center">
+                <div className="text-xs text-gray-400 mb-1">Случайность</div>
+                <div className={`text-2xl font-bold ${deepAnalytics.entropyScore > 70 ? 'text-orange-400' : deepAnalytics.entropyScore < 40 ? 'text-green-400' : 'text-yellow-400'}`}>
+                  {deepAnalytics.entropyScore.toFixed(0)}%
+                </div>
+              </div>
+              <div className="bg-white/5 rounded-lg p-3 border border-white/10 text-center">
+                <div className="text-xs text-gray-400 mb-1">Чередование</div>
+                <div className={`text-2xl font-bold ${deepAnalytics.altRatio > 65 ? 'text-[#0EA5E9]' : deepAnalytics.altRatio < 40 ? 'text-[#D946EF]' : 'text-white'}`}>
+                  {deepAnalytics.altRatio.toFixed(0)}%
+                </div>
+              </div>
+            </div>
+
+            {/* Текущая серия */}
+            <div className="flex items-center gap-3 mb-4 bg-white/5 rounded-lg p-3 border border-white/10">
+              <Icon name="Zap" size={18} className={deepAnalytics.currentStreakLen >= 3 ? 'text-yellow-400' : 'text-gray-400'} />
+              <div className="text-sm">
+                <span className="text-gray-400">Текущая серия: </span>
+                <span className={`font-bold ${deepAnalytics.currentStreakType === 'alpha' ? 'text-[#0EA5E9]' : 'text-[#8B5CF6]'}`}>
+                  {deepAnalytics.currentStreakLen}× «{deepAnalytics.currentStreakType === 'alpha' ? 'α' : 'ω'}»
+                </span>
+                {deepAnalytics.maxStreakAlpha > 1 && (
+                  <span className="text-gray-500 text-xs ml-3">макс.α: {deepAnalytics.maxStreakAlpha}</span>
+                )}
+                {deepAnalytics.maxStreakOmega > 1 && (
+                  <span className="text-gray-500 text-xs ml-2">макс.ω: {deepAnalytics.maxStreakOmega}</span>
+                )}
+              </div>
+            </div>
+
+            {/* Тренд последних 10 событий */}
+            <div className="flex items-center gap-3 mb-5 bg-white/5 rounded-lg p-3 border border-white/10">
+              <Icon name="TrendingUp" size={18} className={
+                deepAnalytics.trendDirection === 'alpha' ? 'text-[#0EA5E9]' :
+                deepAnalytics.trendDirection === 'omega' ? 'text-[#8B5CF6]' : 'text-gray-400'
+              } />
+              <div className="text-sm">
+                <span className="text-gray-400">Тренд: </span>
+                <span className={`font-semibold ${
+                  deepAnalytics.trendDirection === 'alpha' ? 'text-[#0EA5E9]' :
+                  deepAnalytics.trendDirection === 'omega' ? 'text-[#8B5CF6]' : 'text-white'
+                }`}>{deepAnalytics.trendLabel}</span>
+                {deepAnalytics.prev10Alpha !== null && (
+                  <span className="text-gray-500 text-xs ml-2">
+                    (пред.10: α={deepAnalytics.prev10Alpha} → посл.10: α={deepAnalytics.recent10Alpha})
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Ключевые выводы */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Icon name="Lightbulb" size={16} className="text-[#D946EF]" />
+                <span className="text-sm font-semibold text-[#D946EF]">Ключевые выводы системы</span>
+              </div>
+              <div className="space-y-2">
+                {deepAnalytics.insights.map((insight, i) => (
+                  <div key={i} className="flex items-start gap-2 bg-white/5 rounded-lg px-3 py-2 border border-white/5">
+                    <span className="text-[#8B5CF6]/70 font-mono text-xs mt-0.5 shrink-0 w-4">{i + 1}.</span>
+                    <span className={`text-sm ${i === 0 ? 'text-white font-medium' : 'text-gray-300'}`}>{insight}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </Card>
+        )}
 
         {/* Кнопки управления */}
         <div className="flex gap-3 justify-center flex-wrap">
