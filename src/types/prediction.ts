@@ -16,12 +16,20 @@ export interface AlgorithmPrediction {
   weight: number;
 }
 
+export interface AIPrediction {
+  prediction: Column;
+  confidence: number;
+  reasoning: string[];
+  weights: { pattern: number; frequency: number; entropy: number };
+  agreement: 'full' | 'partial' | 'conflict';
+}
+
 export interface AccuracyPoint {
   timestamp: number;
   pattern: number;
   frequency: number;
-  markov: number;
-  ensemble: number;
+  entropy: number;
+  ai: number;
 }
 
 export interface CaptureArea {
@@ -57,14 +65,4 @@ export interface MethodStats {
   accuracy: number;
   avgConfidence: number;
   weight: number;
-}
-
-export interface AdaptiveWeights {
-  pattern: number;
-  frequency: number;
-  markov: number;
-  sequenceDepth: number;
-  nGram: number;
-  entropy: number;
-  streak: number;
 }
