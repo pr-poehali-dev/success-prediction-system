@@ -101,14 +101,27 @@ const Index = () => {
     const rect = canvas.getBoundingClientRect();
     const endX = e.clientX - rect.left;
     const endY = e.clientY - rect.top;
-    const scaleX = video.videoWidth / rect.width;
-    const scaleY = video.videoHeight / rect.height;
-    const x = Math.min(selectionStart.x, endX) * scaleX;
-    const y = Math.min(selectionStart.y, endY) * scaleY;
-    const width = Math.abs(endX - selectionStart.x) * scaleX;
-    const height = Math.abs(endY - selectionStart.y) * scaleY;
-    if (width > 10 && height > 10) {
-      setCaptureArea({ x, y, width, height });
+
+    // Шаг 1: CSS-координаты → canvas 640x360
+    const displayToCanvasX = 640 / rect.width;
+    const displayToCanvasY = 360 / rect.height;
+
+    const canvasX = Math.min(selectionStart.x, endX) * displayToCanvasX;
+    const canvasY = Math.min(selectionStart.y, endY) * displayToCanvasY;
+    const canvasWidth = Math.abs(endX - selectionStart.x) * displayToCanvasX;
+    const canvasHeight = Math.abs(endY - selectionStart.y) * displayToCanvasY;
+
+    // Шаг 2: canvas 640x360 → видео-координаты
+    const canvasToVideoX = video.videoWidth / 640;
+    const canvasToVideoY = video.videoHeight / 360;
+
+    if (canvasWidth > 20 && canvasHeight > 20) {
+      setCaptureArea({
+        x: Math.round(canvasX * canvasToVideoX),
+        y: Math.round(canvasY * canvasToVideoY),
+        width: Math.round(canvasWidth * canvasToVideoX),
+        height: Math.round(canvasHeight * canvasToVideoY),
+      });
       setIsSelectingArea(false);
       setSelectionStart(null);
       setCurrentMousePos(null);
