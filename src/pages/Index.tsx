@@ -5,26 +5,41 @@ import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import { toast } from '@/hooks/use-toast';
-import {
-  Column, HistoryEvent, PredictionHistory,
-  CaptureArea, AIPrediction, MethodPredictionHistory
-} from '@/types/prediction';
-import { runPatternAI } from '@/utils/predictionAlgorithms';
+
+type Column = 'alpha' | 'omega';
+
+interface HistoryEvent {
+  id: number;
+  column: Column;
+  timestamp: Date;
+  source: 'manual' | 'screen';
+}
+
+interface PredictionHistory {
+  id: number;
+  timestamp: Date;
+  prediction: Column;
+  actual: Column;
+  isCorrect: boolean;
+  confidence: number;
+}
+
+interface CaptureArea {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 const Index = () => {
   const [history, setHistory] = useState<HistoryEvent[]>([]);
   const [recognizedHistory, setRecognizedHistory] = useState<Column[]>([]);
   const [currentSuccess, setCurrentSuccess] = useState<Column | null>(null);
   const [timeLeft, setTimeLeft] = useState(30);
-
-  const [aiResult, setAiResult] = useState<AIPrediction | null>(null);
-  const [methodHistory, setMethodHistory] = useState<MethodPredictionHistory[]>([]);
-
   const [currentPrediction, setCurrentPrediction] = useState<{ column: Column; confidence: number } | null>(null);
   const [previousPrediction, setPreviousPrediction] = useState<Column | null>(null);
   const [lastPredictionResult, setLastPredictionResult] = useState<'correct' | 'incorrect' | null>(null);
   const [predictionHistory, setPredictionHistory] = useState<PredictionHistory[]>([]);
-
   const [isCapturing, setIsCapturing] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -39,22 +54,196 @@ const Index = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 
-  // ─── Запуск алгоритма ─────────────────────────────────────────────────────
-  const runPredictions = (hist: Column[], mHistory: MethodPredictionHistory[]) => {
-    if (hist.length < 4) return;
-    const ai = runPatternAI(hist, mHistory);
-    setAiResult(ai);
-    setCurrentPrediction({ column: ai.prediction, confidence: ai.confidence });
-    setPreviousPrediction(ai.prediction);
+  // ─── Тип результата прогноза ─────────────────────────────────────────────────
+  type PredictionResult = {
+    column: Column;
+    confidence: number;
+    strategyName: string;
+    alphaProb: number;
+    omegaProb: number;
+    occurrences: number;
+    pattern: string;
+    imbalance: number;
+    reasoning: string[];
   };
 
-  useEffect(() => {
-    if (recognizedHistory.length > 0) {
-      runPredictions(recognizedHistory, methodHistory);
+  // ─── Поиск лучшего паттерна длиной len в конце истории ────────────────────
+  const findPatternStats = (hist: Column[], len: number): { alphaCount: number; omegaCount: number; key: string } | null => {
+    if (hist.length < len + 1) return null;
+    const key = hist.slice(-len).join('-');
+    let alphaCount = 0;
+    let omegaCount = 0;
+    for (let i = 0; i <= hist.length - len - 1; i++) {
+      if (hist.slice(i, i + len).join('-') === key) {
+        if (hist[i + len] === 'alpha') alphaCount++; else omegaCount++;
+      }
     }
-  }, [recognizedHistory]);
+    return { alphaCount, omegaCount, key };
+  };
 
-  // ─── Захват экрана ────────────────────────────────────────────────────────
+  // ─── Генерация интеллектуального рассуждения ──────────────────────────────
+  const buildReasoning = (
+    hist: Column[],
+    patternKey: string,
+    patternLen: number,
+    alphaCnt: number,
+    omegaCnt: number,
+    imbalance: number,
+    finalPred: Column
+  ): string[] => {
+    const lines: string[] = [];
+    const total = alphaCnt + omegaCnt;
+    const symbols = patternKey.split('-').map(s => s === 'alpha' ? 'α' : 'ω').join('');
+
+    // 1. Описание паттерна
+    const patternType = (() => {
+      const parts = patternKey.split('-');
+      if (parts.every(p => p === parts[0])) return `серия из ${patternLen} одинаковых (${symbols})`;
+      const alternating = parts.every((p, i) => i === 0 || p !== parts[i - 1]);
+      if (alternating) return `чередование (${symbols})`;
+      return `смешанный паттерн (${symbols})`;
+    })();
+
+    lines.push(`Последние ${patternLen} событий образуют ${patternType}.`);
+
+    // 2. Статистика по паттерну
+    if (total > 0) {
+      const dominantLabel = alphaCnt >= omegaCnt ? 'α (Альфа)' : 'ω (Омега)';
+      const pct = Math.round(Math.max(alphaCnt, omegaCnt) / total * 100);
+      if (total >= 3) {
+        lines.push(`В истории этот паттерн встречался ${total} раз — после него ${dominantLabel} выпадало в ${pct}% случаев.`);
+      } else {
+        lines.push(`Паттерн редкий (${total} вхождений в истории), статистика ограничена.`);
+      }
+    }
+
+    // 3. Баланс α/ω
+    const currentAlpha = hist.filter(c => c === 'alpha').length;
+    const currentOmega = hist.filter(c => c === 'omega').length;
+    if (Math.abs(imbalance) >= 5) {
+      const dominant = imbalance > 0 ? 'α' : 'ω';
+      const minority = imbalance > 0 ? 'ω' : 'α';
+      lines.push(`Сильный дисбаланс: ${dominant} выпадало ${Math.max(currentAlpha, currentOmega)} раз, ${minority} — ${Math.min(currentAlpha, currentOmega)}. Система тяготеет к выравниванию.`);
+    } else if (Math.abs(imbalance) >= 2) {
+      const dominant = imbalance > 0 ? 'α' : 'ω';
+      lines.push(`Небольшой перевес в сторону ${dominant} (разница ${Math.abs(imbalance)}). Это учтено в прогнозе.`);
+    } else {
+      lines.push(`Баланс α/ω близок к 50/50 (α:${currentAlpha} ω:${currentOmega}) — паттерн получает максимальный вес.`);
+    }
+
+    // 4. Итог
+    const predLabel = finalPred === 'alpha' ? 'АЛЬФА (α)' : 'ОМЕГА (ω)';
+    lines.push(`Итог: прогноз — ${predLabel}.`);
+
+    return lines;
+  };
+
+  // ─── Основной прогноз: лучший паттерн длиной 3, 4 или 5 + баланс ─────────
+  const computePrediction = (hist: Column[]): PredictionResult | null => {
+    if (hist.length < 4) return null;
+
+    const currentAlpha = hist.filter(c => c === 'alpha').length;
+    const currentOmega = hist.filter(c => c === 'omega').length;
+    const imbalance = currentAlpha - currentOmega;
+
+    // Ищем лучший паттерн: приоритет длинным (5 > 4 > 3), с максимальной уверенностью
+    let bestPattern: { key: string; len: number; alphaCount: number; omegaCount: number; confidence: number } | null = null;
+
+    for (const len of [5, 4, 3]) {
+      const stats = findPatternStats(hist, len);
+      if (!stats) continue;
+      const { alphaCount, omegaCount, key } = stats;
+      const total = alphaCount + omegaCount;
+      if (total === 0) continue;
+      const conf = (Math.max(alphaCount, omegaCount) / total) * 100;
+      // Принимаем если встречался хоть раз и уверенность > 50%
+      if (conf >= 50 && (!bestPattern || conf > bestPattern.confidence || (conf === bestPattern.confidence && len > bestPattern.len))) {
+        bestPattern = { key, len, alphaCount, omegaCount, confidence: conf };
+      }
+    }
+
+    if (!bestPattern) return null;
+
+    const { key, len, alphaCount, omegaCount } = bestPattern;
+    const total = alphaCount + omegaCount;
+    const alphaProb = (alphaCount / total) * 100;
+    const omegaProb = (omegaCount / total) * 100;
+    const patternPrediction: Column = alphaCount >= omegaCount ? 'alpha' : 'omega';
+
+    // Учитываем баланс: чем сильнее дисбаланс, тем больше его вес
+    const balancePrediction: Column = imbalance > 0 ? 'omega' : 'alpha';
+    const balanceWeight = Math.min(0.5, Math.abs(imbalance) / (hist.length + 1));
+    const patternWeight = 1 - balanceWeight;
+
+    let finalPrediction: Column;
+    let confidence: number;
+    let strategyName: string;
+
+    if (patternPrediction === balancePrediction) {
+      finalPrediction = patternPrediction;
+      confidence = Math.min(95, bestPattern.confidence + balanceWeight * 20);
+      strategyName = `Паттерн + Баланс сходятся`;
+    } else if (balanceWeight > 0.3) {
+      finalPrediction = balancePrediction;
+      confidence = Math.min(88, 55 + Math.abs(imbalance) * 3);
+      strategyName = `Коррекция баланса (перевес: ${imbalance > 0 ? '+' : ''}${imbalance})`;
+    } else {
+      finalPrediction = patternPrediction;
+      confidence = Math.min(92, bestPattern.confidence * patternWeight + 50 * balanceWeight);
+      const symbols = key.split('-').map(s => s === 'alpha' ? 'α' : 'ω').join('');
+      strategyName = `Паттерн [${symbols}] → следующий`;
+    }
+
+    const reasoning = buildReasoning(hist, key, len, alphaCount, omegaCount, imbalance, finalPrediction);
+
+    return {
+      column: finalPrediction,
+      confidence,
+      strategyName,
+      alphaProb,
+      omegaProb,
+      occurrences: total,
+      pattern: key,
+      imbalance,
+      reasoning
+    };
+  };
+
+  // ─── Топ-5 паттернов (длина 3–5, по всей истории) ─────────────────────────
+  const getTopPatterns = (hist: Column[]) => {
+    if (hist.length < 4) return [];
+
+    const map = new Map<string, { nextAlpha: number; nextOmega: number; len: number }>();
+    for (const len of [3, 4, 5]) {
+      for (let i = 0; i <= hist.length - len - 1; i++) {
+        const key = hist.slice(i, i + len).join('-');
+        const next = hist[i + len];
+        if (!map.has(key)) map.set(key, { nextAlpha: 0, nextOmega: 0, len });
+        const d = map.get(key)!;
+        if (next === 'alpha') d.nextAlpha++; else d.nextOmega++;
+      }
+    }
+
+    return Array.from(map.entries())
+      .filter(([, d]) => d.nextAlpha + d.nextOmega >= 2)
+      .map(([pattern, d]) => {
+        const total = d.nextAlpha + d.nextOmega;
+        const conf = (Math.max(d.nextAlpha, d.nextOmega) / total) * 100;
+        return {
+          pattern,
+          total,
+          nextAlpha: d.nextAlpha,
+          nextOmega: d.nextOmega,
+          prediction: d.nextAlpha >= d.nextOmega ? 'alpha' as Column : 'omega' as Column,
+          confidence: conf,
+          len: d.len
+        };
+      })
+      .sort((a, b) => b.confidence - a.confidence || b.total - a.total)
+      .slice(0, 5);
+  };
+
+  // ─── Захват экрана ──────────────────────────────────────────────────────────
   const startScreenCapture = async () => {
     try {
       const stream = await navigator.mediaDevices.getDisplayMedia({ video: { mediaSource: 'screen' } });
@@ -65,7 +254,7 @@ const Index = () => {
         await videoRef.current.play();
       }
       stream.getVideoTracks()[0].addEventListener('ended', stopScreenCapture);
-      toast({ title: "Захват экрана запущен", description: "Выберите область для распознавания" });
+      toast({ title: "Захват экрана запущен", description: "Теперь выберите область для распознавания" });
       setTimeout(() => setIsSelectingArea(true), 500);
     } catch {
       toast({ title: "Ошибка захвата", description: "Не удалось начать захват экрана", variant: "destructive" });
@@ -144,16 +333,12 @@ const Index = () => {
     if (totalPixels === 0) return null;
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i], g = data[i + 1], b = data[i + 2];
-      if (
-        (b > 150 && b > r * 1.3 && b > g * 1.1 && g > r * 0.8) ||
-        (b > 120 && g > 100 && b > r * 1.5 && Math.abs(b - g) < 80)
-      ) {
+      if ((b > 150 && b > r * 1.3 && b > g * 1.1 && g > r * 0.8) ||
+          (b > 120 && g > 100 && b > r * 1.5 && Math.abs(b - g) < 80)) {
         cyanScore += b - r;
       }
-      if (
-        (b > 100 && r > 80 && b > g * 1.2 && r > g * 0.9 && Math.abs(r - b) < 100) ||
-        (r > 100 && b > 100 && b > g * 1.3 && r > g * 1.2)
-      ) {
+      if ((b > 100 && r > 80 && b > g * 1.2 && r > g * 0.9 && Math.abs(r - b) < 100) ||
+          (r > 100 && b > 100 && b > g * 1.3 && r > g * 1.2)) {
         purpleScore += (r + b) / 2 - g;
       }
     }
@@ -164,7 +349,7 @@ const Index = () => {
     return result;
   };
 
-  // ─── Recognition loop ─────────────────────────────────────────────────────
+  // ─── Recognition loop ───────────────────────────────────────────────────────
   useEffect(() => {
     if (!isCapturing || !isRunning || isPaused || !captureArea) return;
     let lastExecutionTime = Date.now();
@@ -178,45 +363,23 @@ const Index = () => {
       if (detectedColumn) {
         const now = Date.now();
         if (now - lastExecutionTime < 5000) { isExecuting = false; return; }
-
         if (previousPrediction && currentPrediction) {
           const isCorrect = previousPrediction === detectedColumn;
           setLastPredictionResult(isCorrect ? 'correct' : 'incorrect');
           setTimeout(() => setLastPredictionResult(null), 5000);
-
-          const ts = now;
-          setMethodHistory(prev => [
-            ...prev,
-            {
-              id: ts,
-              timestamp: new Date(),
-              methodName: 'Pattern Recognition',
-              prediction: previousPrediction,
-              actual: detectedColumn,
-              isCorrect: previousPrediction === detectedColumn,
-              confidence: currentPrediction.confidence,
-            }
-          ]);
-
           setPredictionHistory(prev => [...prev, {
-            id: ts,
-            timestamp: new Date(),
-            prediction: previousPrediction,
-            actual: detectedColumn,
-            isCorrect,
-            confidence: currentPrediction.confidence
+            id: Date.now(), timestamp: new Date(),
+            prediction: previousPrediction, actual: detectedColumn,
+            isCorrect, confidence: currentPrediction.confidence
           }]);
         }
-
         const newEvent: HistoryEvent = { id: Date.now(), column: detectedColumn, timestamp: new Date(), source: 'screen' };
         setHistory(prev => [...prev, newEvent]);
         setRecognizedHistory(prev => [...prev, detectedColumn]);
         setCurrentSuccess(detectedColumn);
-
         const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIGWS56+OZRQ0PVKjk7ahiHAU7k9rxzH0vBSl+zPDef0IKFmG47OWkUhEMTKXh8bllHgU');
         audio.volume = 0.3;
         audio.play().catch(() => {});
-
         setTimeout(() => setCurrentSuccess(null), 2000);
         setTimeLeft(30);
         toast({ title: `Распознано!`, description: `Обнаружена колонка: ${detectedColumn === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}` });
@@ -231,14 +394,14 @@ const Index = () => {
     return () => { if (intervalId) clearInterval(intervalId); };
   }, [isCapturing, isRunning, isPaused, captureArea, previousPrediction]);
 
-  // ─── Timer ────────────────────────────────────────────────────────────────
+  // ─── Timer ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (isPaused || !isRunning) return;
     const timer = setInterval(() => { setTimeLeft(prev => prev <= 1 ? 30 : prev - 1); }, 1000);
     return () => clearInterval(timer);
   }, [isCapturing, isPaused, isRunning, previousPrediction]);
 
-  // ─── Preview canvas ───────────────────────────────────────────────────────
+  // ─── Preview canvas ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isCapturing || !videoRef.current || !previewCanvasRef.current) return;
     let animationId: number;
@@ -273,7 +436,18 @@ const Index = () => {
     return () => { if (animationId) cancelAnimationFrame(animationId); };
   }, [isCapturing, captureArea, isSelectingArea, selectionStart, currentMousePos]);
 
-  // ─── Управление ───────────────────────────────────────────────────────────
+  // ─── Обновление прогноза при новом событии ──────────────────────────────────
+  useEffect(() => {
+    if (recognizedHistory.length > 0) {
+      const pred = computePrediction(recognizedHistory);
+      if (pred) {
+        setCurrentPrediction({ column: pred.column, confidence: pred.confidence });
+        setPreviousPrediction(pred.column);
+      }
+    }
+  }, [recognizedHistory]);
+
+  // ─── Управление ─────────────────────────────────────────────────────────────
   const handleStart = () => {
     if (!isCapturing) { toast({ title: "Сначала запустите захват экрана", variant: "destructive" }); return; }
     if (!captureArea) { toast({ title: "Сначала выберите область", variant: "destructive" }); return; }
@@ -290,7 +464,6 @@ const Index = () => {
     setHistory([]); setRecognizedHistory([]); setCurrentSuccess(null);
     setTimeLeft(30); setCurrentPrediction(null); setPreviousPrediction(null);
     setLastPredictionResult(null); setPredictionHistory([]);
-    setAiResult(null); setMethodHistory([]);
     setIsPaused(false); setIsRunning(false); setLastRecognizedText('');
     toast({ title: "Система сброшена", description: "Все данные очищены" });
   };
@@ -303,12 +476,8 @@ const Index = () => {
 
   const exportToCSV = () => {
     const csv = [
-      ['№', 'Колонка', 'Время'].join(','),
-      ...history.map((e, i) => [
-        i + 1,
-        e.column === 'alpha' ? 'Альфа' : 'Омега',
-        e.timestamp.toLocaleString('ru-RU'),
-      ].join(','))
+      ['№', 'Колонка', 'Время', 'Источник'].join(','),
+      ...history.map((e, i) => [i + 1, e.column === 'alpha' ? 'Альфа' : 'Омега', e.timestamp.toLocaleString('ru-RU'), e.source === 'screen' ? 'Захват экрана' : 'Ручной'].join(','))
     ].join('\n');
     const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -318,14 +487,17 @@ const Index = () => {
     toast({ title: "Экспорт завершен", description: `Сохранено ${history.length} событий` });
   };
 
-  // ─── Вычисляемые данные ───────────────────────────────────────────────────
+  // ─── Вычисляемые данные ──────────────────────────────────────────────────────
   const stats = {
     alpha: history.filter(e => e.column === 'alpha').length,
     omega: history.filter(e => e.column === 'omega').length,
     total: history.length
   };
 
-  // ─── UI ───────────────────────────────────────────────────────────────────
+  const topPatterns = getTopPatterns(recognizedHistory);
+  const adaptivePred = computePrediction(recognizedHistory);
+
+  // ─── UI ──────────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#1A1F2C] via-[#221F26] to-[#1A1F2C] text-white p-6">
       <video ref={videoRef} className="hidden" />
@@ -338,7 +510,8 @@ const Index = () => {
           <h1 className="text-4xl font-bold bg-gradient-to-r from-[#0EA5E9] via-[#8B5CF6] to-[#D946EF] bg-clip-text text-transparent">
             SUCCESS Predictor
           </h1>
-          <p className="text-gray-400">Pattern Recognition AI</p>
+          <p className="text-gray-400">Анализ паттернов • Баланс 50/50</p>
+          <p className="text-sm text-gray-500">Паттерн: 4 события → прогноз 5-го</p>
 
           {history.length > 0 && (
             <div className="mt-4 max-w-md mx-auto">
@@ -360,164 +533,200 @@ const Index = () => {
                     style={{ width: `${stats.total > 0 ? (stats.omega / stats.total) * 100 : 50}%` }} />
                   <div className="absolute left-1/2 top-0 w-0.5 h-full bg-white/50 -translate-x-1/2" />
                 </div>
+                <div className="flex items-center justify-center mt-2 text-xs">
+                  <span className={`${Math.abs(stats.alpha - stats.omega) < 3 ? 'text-green-400' : Math.abs(stats.alpha - stats.omega) < 6 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    {Math.abs(stats.alpha - stats.omega) < 3 ? '✓ Сбалансировано' :
+                     Math.abs(stats.alpha - stats.omega) < 6 ? '⚠ Небольшой дисбаланс' :
+                     `⚡ Дисбаланс: ${stats.alpha > stats.omega ? 'α' : 'ω'} доминирует`}
+                  </span>
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* ── AI Прогноз (главный блок) ─────────────────────────────────────── */}
-        {aiResult ? (
-          <Card className="bg-gradient-to-br from-[#D946EF]/10 via-[#8B5CF6]/10 to-[#0EA5E9]/10 border-[#D946EF]/30 p-6">
-            {/* Шапка */}
-            <div className="flex items-start gap-4 mb-5">
-              <div className="bg-gradient-to-br from-[#D946EF] to-[#8B5CF6] p-3 rounded-xl flex-shrink-0">
-                <Icon name="BrainCircuit" size={28} className="text-white" />
-              </div>
-              <div className="flex-1">
-                <h2 className="text-xl font-bold">AI Прогноз — Pattern Recognition</h2>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  Поиск повторяющихся последовательностей длиной 5–6 в истории
-                </p>
-              </div>
-
-              {/* Следующее значение */}
-              <div className="text-right flex-shrink-0">
-                <div className={`text-3xl font-bold ${aiResult.prediction === 'alpha' ? 'text-[#0EA5E9]' : 'text-[#8B5CF6]'}`}>
-                  {aiResult.prediction === 'alpha' ? 'АЛЬФА α' : 'ОМЕГА ω'}
-                </div>
-                <div className="text-gray-400 text-sm">Уверенность: {aiResult.confidence}%</div>
-                <Progress
-                  value={aiResult.confidence}
-                  className="mt-1 h-1.5 w-32 ml-auto"
-                />
-              </div>
-            </div>
-
-            {/* Ожидаемый паттерн из 5 */}
-            <div className="bg-black/25 rounded-xl p-4 border border-white/10 mb-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Icon name="TrendingUp" size={15} className="text-[#D946EF]" />
-                <span className="text-xs font-semibold text-[#D946EF] uppercase tracking-wide">
-                  Ожидаемая последовательность (5 шагов)
-                </span>
-                <span className="ml-auto text-xs text-gray-500">~{aiResult.nextPatternConfidence}%</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {aiResult.nextPattern.map((val, idx) => (
-                  <div key={idx} className="flex flex-col items-center gap-1">
-                    <div
-                      className={`w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold border-2 transition-all
-                        ${idx === 0
-                          ? val === 'alpha'
-                            ? 'bg-[#0EA5E9]/30 border-[#0EA5E9] text-[#0EA5E9] ring-2 ring-[#0EA5E9]/40'
-                            : 'bg-[#8B5CF6]/30 border-[#8B5CF6] text-[#8B5CF6] ring-2 ring-[#8B5CF6]/40'
-                          : val === 'alpha'
-                            ? 'bg-[#0EA5E9]/10 border-[#0EA5E9]/50 text-[#0EA5E9]/80'
-                            : 'bg-[#8B5CF6]/10 border-[#8B5CF6]/50 text-[#8B5CF6]/80'
-                        }`}
-                    >
-                      {val === 'alpha' ? 'α' : 'ω'}
-                    </div>
-                    <span className="text-[10px] text-gray-500">+{idx + 1}</span>
+        {/* Основной прогноз */}
+        <Card className="bg-gradient-to-br from-[#D946EF]/10 via-[#8B5CF6]/10 to-[#0EA5E9]/10 border-[#D946EF]/30 p-6">
+          {adaptivePred ? (
+            <>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="bg-gradient-to-br from-[#D946EF] to-[#8B5CF6] p-4 rounded-xl">
+                    <Icon name="Sparkles" size={32} className="text-white" />
                   </div>
-                ))}
-              </div>
-              <p className="text-xs text-gray-500 mt-3">
-                Первый шаг (подсвечен) — текущий прогноз, далее — AI-прогноз цепочки
-              </p>
-            </div>
-
-            {/* Найденный паттерн */}
-            {aiResult.matchedPattern && (
-              <div className="bg-black/20 rounded-lg p-3 border border-white/10 mb-4 flex items-center gap-3">
-                <Icon name="ScanSearch" size={16} className="text-[#0EA5E9] flex-shrink-0" />
-                <div>
-                  <span className="text-xs text-gray-400">Найденный паттерн в истории: </span>
-                  <span className="text-sm font-mono font-bold text-white tracking-widest">
-                    [{aiResult.matchedPattern}]
-                  </span>
-                  <span className="text-xs text-gray-400 ml-2">→ предсказывает </span>
-                  <span className={`text-sm font-bold ${aiResult.prediction === 'alpha' ? 'text-[#0EA5E9]' : 'text-[#8B5CF6]'}`}>
-                    {aiResult.prediction === 'alpha' ? 'α' : 'ω'}
-                  </span>
+                  <div>
+                    <h2 className="text-2xl font-bold mb-1">Прогноз</h2>
+                    <p className="text-gray-400 text-sm">Стратегия: {adaptivePred.strategyName}</p>
+                    <p className="text-gray-500 text-xs mt-1">
+                      α:{stats.alpha} ω:{stats.omega} • дисбаланс: {adaptivePred.imbalance > 0 ? '+' : ''}{adaptivePred.imbalance}
+                    </p>
+                  </div>
+                </div>
+                <div className={`px-8 py-4 rounded-xl border-2 ${
+                  adaptivePred.column === 'alpha' ? 'bg-[#0EA5E9]/20 border-[#0EA5E9]' : 'bg-[#8B5CF6]/20 border-[#8B5CF6]'
+                }`}>
+                  <div className="text-sm text-gray-400 mb-1 text-center">Следующее</div>
+                  <div className={`text-5xl font-bold text-center ${adaptivePred.column === 'alpha' ? 'text-[#0EA5E9]' : 'text-[#8B5CF6]'}`}>
+                    {adaptivePred.column === 'alpha' ? 'α' : 'ω'}
+                  </div>
+                  <div className={`text-xs text-center mt-1 ${adaptivePred.column === 'alpha' ? 'text-[#0EA5E9]' : 'text-[#8B5CF6]'}`}>
+                    {adaptivePred.column === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
+                  </div>
                 </div>
               </div>
-            )}
 
-            {/* Рассуждение AI */}
-            <div className="bg-black/20 rounded-lg p-3 border border-white/10 space-y-1">
-              <div className="flex items-center gap-2 mb-2">
-                <Icon name="Cpu" size={14} className="text-[#D946EF]" />
-                <span className="text-xs font-semibold text-[#D946EF] uppercase tracking-wide">Анализ AI</span>
+              {/* Паттерн + статистика */}
+              <div className="mt-4 pt-4 border-t border-white/10">
+                <div className="flex items-center justify-between text-sm flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-gray-400">Паттерн:</span>
+                    <div className="flex gap-1">
+                      {adaptivePred.pattern.split('-').map((s, i) => (
+                        <Badge key={i} className={`${s === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none`}>
+                          {s === 'alpha' ? 'α' : 'ω'}
+                        </Badge>
+                      ))}
+                      <span className="text-gray-500 mx-1">→</span>
+                      <Badge className={`${adaptivePred.column === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none ring-2 ring-[#D946EF]`}>
+                        {adaptivePred.column === 'alpha' ? 'α' : 'ω'}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex gap-4 text-xs">
+                    <span className="text-gray-400">α: <span className="text-white">{adaptivePred.alphaProb.toFixed(0)}%</span></span>
+                    <span className="text-gray-400">ω: <span className="text-white">{adaptivePred.omegaProb.toFixed(0)}%</span></span>
+                    <span className="text-gray-400">встречался: <span className="text-white">{adaptivePred.occurrences}×</span></span>
+                    <span className="text-gray-400">уверенность: <span className="text-[#D946EF] font-bold">{adaptivePred.confidence.toFixed(0)}%</span></span>
+                  </div>
+                </div>
               </div>
-              {aiResult.reasoning.map((line, i) => (
-                <p
-                  key={i}
-                  className={`text-xs ${i === aiResult.reasoning.length - 1 ? 'text-white font-semibold' : 'text-gray-400'}`}
-                >
-                  {i === aiResult.reasoning.length - 1 ? '→ ' : '• '}{line}
-                </p>
-              ))}
+
+              {/* Рассуждение системы */}
+              {adaptivePred.reasoning && adaptivePred.reasoning.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-white/10">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon name="BrainCircuit" size={16} className="text-[#D946EF]" />
+                    <span className="text-sm font-semibold text-[#D946EF]">Рассуждение системы</span>
+                  </div>
+                  <div className="space-y-2">
+                    {adaptivePred.reasoning.map((line, i) => (
+                      <div key={i} className="flex items-start gap-2 text-sm">
+                        <span className="text-[#D946EF]/60 font-mono text-xs mt-0.5 shrink-0">{i + 1}.</span>
+                        <span className={`${i === adaptivePred.reasoning.length - 1 ? 'text-white font-semibold' : 'text-gray-300'}`}>{line}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8">
+              <div className="bg-gradient-to-br from-[#D946EF] to-[#8B5CF6] p-4 rounded-xl mb-4">
+                <Icon name="Sparkles" size={32} className="text-white" />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Прогноз</h2>
+              <p className="text-gray-400 text-center">Накопите минимум 4 события для первого прогноза</p>
             </div>
-          </Card>
-        ) : (
-          <Card className="bg-white/5 border-white/10 p-6 text-center text-gray-500">
-            <Icon name="BrainCircuit" size={40} className="mx-auto mb-3 opacity-30" />
-            <p>Добавьте минимум 4 события для активации AI</p>
-          </Card>
-        )}
-
-        {/* ── Захват экрана ─────────────────────────────────────────────────── */}
-        <Card className="bg-white/5 border-white/10 p-5">
-          <div className="flex items-center gap-3 mb-4">
-            <Icon name="Monitor" size={20} className="text-[#0EA5E9]" />
-            <h3 className="text-lg font-semibold">Захват экрана</h3>
-            {isCapturing && <Badge className="bg-green-500/20 text-green-400 border-green-500/30">Активен</Badge>}
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            {!isCapturing ? (
-              <Button onClick={startScreenCapture}
-                className="bg-gradient-to-r from-[#0EA5E9] to-[#8B5CF6] hover:opacity-90 text-white">
-                <Icon name="Video" size={18} className="mr-2" />Начать захват экрана
-              </Button>
-            ) : (
-              <Button onClick={stopScreenCapture} variant="outline" className="border-red-500 text-red-400 hover:bg-red-500/10">
-                <Icon name="VideoOff" size={18} className="mr-2" />Остановить захват
-              </Button>
-            )}
-
-            {isCapturing && (
-              <>
-                {!isRunning ? (
-                  <Button onClick={handleStart} disabled={!captureArea}
-                    className="bg-gradient-to-r from-green-500 to-emerald-600 hover:opacity-90 text-white text-lg px-8 py-6">
-                    <Icon name="Play" size={24} className="mr-2" />Начать
-                  </Button>
-                ) : (
-                  <Button onClick={handleStop}
-                    className="bg-gradient-to-r from-red-500 to-red-600 hover:opacity-90 text-white text-lg px-8 py-6">
-                    <Icon name="Square" size={24} className="mr-2" />Стоп
-                  </Button>
-                )}
-                <Button onClick={handlePauseResume} variant="outline" disabled={!isRunning}
-                  className="border-yellow-500 text-yellow-400 hover:bg-yellow-500/10">
-                  <Icon name={isPaused ? "Play" : "Pause"} size={20} className="mr-2" />
-                  {isPaused ? 'Возобновить' : 'Пауза'}
-                </Button>
-              </>
-            )}
-
-            <Button onClick={handleReset} variant="outline" className="border-red-500 text-red-400 hover:bg-red-500/10">
-              <Icon name="RotateCcw" size={20} className="mr-2" />Сброс
-            </Button>
-            {history.length > 0 && (
-              <Button onClick={exportToCSV} variant="outline" className="border-[#8B5CF6] text-[#8B5CF6] hover:bg-[#8B5CF6]/10">
-                <Icon name="Download" size={20} className="mr-2" />Экспорт CSV
-              </Button>
-            )}
-          </div>
+          )}
         </Card>
+
+        {/* Топ-5 паттернов */}
+        <Card className="bg-white/5 border-white/10 p-6">
+          {topPatterns.length > 0 ? (
+            <>
+              <div className="flex items-center gap-3 mb-4">
+                <Icon name="Database" size={24} className="text-[#0EA5E9]" />
+                <h3 className="text-xl font-bold">Топ-5 паттернов</h3>
+                <Badge className="bg-[#0EA5E9]/20 text-[#0EA5E9] border-none">{topPatterns.length} найдено</Badge>
+                <span className="text-gray-500 text-xs">(паттерн 3–5 событий → следующий)</span>
+              </div>
+              <div className="space-y-3">
+                {topPatterns.map((seq, idx) => {
+                  const isActive = adaptivePred && seq.pattern === adaptivePred.pattern;
+                  return (
+                    <div key={idx} className={`bg-white/5 rounded-lg p-4 border ${isActive ? 'border-[#D946EF] bg-[#D946EF]/10' : 'border-white/10'}`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Badge className="bg-gradient-to-r from-[#0EA5E9] to-[#8B5CF6] text-white border-none px-3">#{idx + 1}</Badge>
+                          <div className="flex items-center gap-1">
+                            {seq.pattern.split('-').map((s, i) => (
+                              <Badge key={i} className={`${s === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none font-bold`}>
+                                {s === 'alpha' ? 'α' : 'ω'}
+                              </Badge>
+                            ))}
+                            <span className="text-gray-500 mx-1">→</span>
+                            <Badge className={`${seq.prediction === 'alpha' ? 'bg-[#0EA5E9]/30 text-[#0EA5E9] border-[#0EA5E9]' : 'bg-[#8B5CF6]/30 text-[#8B5CF6] border-[#8B5CF6]'} border font-bold`}>
+                              {seq.prediction === 'alpha' ? 'α' : 'ω'}
+                            </Badge>
+                          </div>
+                          <span className="text-gray-400 text-sm">встречался: <span className="text-white font-semibold">{seq.total}×</span></span>
+                          <span className="text-gray-400 text-sm">уверенность: <span className="text-white font-semibold">{seq.confidence.toFixed(0)}%</span></span>
+                        </div>
+                        <div className="flex gap-3 text-xs text-gray-400">
+                          <span>α:{seq.nextAlpha}</span>
+                          <span>ω:{seq.nextOmega}</span>
+                        </div>
+                      </div>
+                      {isActive && (
+                        <div className="mt-2 pt-2 border-t border-[#D946EF]/30 flex items-center gap-2">
+                          <Icon name="Sparkles" size={14} className="text-[#D946EF]" />
+                          <span className="text-[#D946EF] text-sm font-semibold">Активный паттерн для прогноза</span>
+                        </div>
+                      )}
+                      <Progress value={seq.confidence} className="h-1 mt-3" />
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-8">
+              <Icon name="Database" size={48} className="text-[#0EA5E9] mb-4" />
+              <h3 className="text-xl font-bold mb-2">Топ-5 паттернов</h3>
+              <p className="text-gray-400 text-center">Нужно больше данных для анализа паттернов</p>
+            </div>
+          )}
+        </Card>
+
+        {/* Кнопки управления */}
+        <div className="flex gap-3 justify-center flex-wrap">
+          <Button
+            onClick={isCapturing ? stopScreenCapture : startScreenCapture}
+            className={`${isCapturing ? 'bg-red-500 hover:bg-red-600' : 'bg-gradient-to-r from-[#8B5CF6] to-[#0EA5E9] hover:opacity-90'} text-lg px-8 py-6`}
+          >
+            <Icon name={isCapturing ? "StopCircle" : "Monitor"} size={24} className="mr-2" />
+            {isCapturing ? 'Остановить захват' : 'Начать захват экрана'}
+          </Button>
+
+          {isCapturing && (
+            <>
+              {!isRunning ? (
+                <Button onClick={handleStart} disabled={!captureArea}
+                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:opacity-90 text-white text-lg px-8 py-6">
+                  <Icon name="Play" size={24} className="mr-2" />Начать
+                </Button>
+              ) : (
+                <Button onClick={handleStop}
+                  className="bg-gradient-to-r from-red-500 to-red-600 hover:opacity-90 text-white text-lg px-8 py-6">
+                  <Icon name="Square" size={24} className="mr-2" />Стоп
+                </Button>
+              )}
+              <Button onClick={handlePauseResume} variant="outline" disabled={!isRunning}
+                className="border-yellow-500 text-yellow-400 hover:bg-yellow-500/10">
+                <Icon name={isPaused ? "Play" : "Pause"} size={20} className="mr-2" />
+                {isPaused ? 'Возобновить' : 'Пауза'}
+              </Button>
+              <Button onClick={handleReset} variant="outline" className="border-red-500 text-red-400 hover:bg-red-500/10">
+                <Icon name="RotateCcw" size={20} className="mr-2" />Сброс
+              </Button>
+              {history.length > 0 && (
+                <Button onClick={exportToCSV} variant="outline" className="border-[#8B5CF6] text-[#8B5CF6] hover:bg-[#8B5CF6]/10">
+                  <Icon name="Download" size={20} className="mr-2" />Экспорт CSV
+                </Button>
+              )}
+            </>
+          )}
+        </div>
 
         {/* Статус-подсказки */}
         {!isCapturing && (
@@ -574,7 +783,7 @@ const Index = () => {
               </div>
               <p className="text-sm text-gray-400">
                 {isSelectingArea ? 'Нарисуйте прямоугольник вокруг нужной области' :
-                 captureArea ? 'Область выбрана (чёрный прямоугольник).' : 'Область не выбрана'}
+                 captureArea ? 'Область выбрана (чёрный прямоугольник). Перевыбрать:' : 'Область не выбрана'}
               </p>
               {captureArea && !isSelectingArea && (
                 <Button onClick={handleReselectArea} variant="outline" size="sm"
@@ -606,14 +815,12 @@ const Index = () => {
                     {lastPredictionResult === 'correct' ? 'Прогноз совпал!' : 'Прогноз не совпал'}
                   </h3>
                   <p className="text-gray-400 mt-1">
-                    AI предсказал:{' '}
-                    <Badge className={`${previousPrediction === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none ml-2`}>
+                    Предсказано: <Badge className={`${previousPrediction === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none ml-2`}>
                       {previousPrediction === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
                     </Badge>
                   </p>
                   <p className="text-gray-400 mt-1">
-                    Факт:{' '}
-                    <Badge className={`${history[history.length - 1]?.column === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none ml-2`}>
+                    Факт: <Badge className={`${history[history.length - 1]?.column === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none ml-2`}>
                       {history[history.length - 1]?.column === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
                     </Badge>
                   </p>
@@ -651,7 +858,6 @@ const Index = () => {
                 </div>
               </div>
             </div>
-
             <div className="mt-4 flex items-center gap-2">
               <span className="text-gray-400 text-sm">Последние 5:</span>
               <div className="flex gap-2">
@@ -666,18 +872,16 @@ const Index = () => {
         )}
 
         {/* Таймер */}
-        {isRunning && (
-          <Card className="bg-white/5 border-white/10 p-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Icon name="Clock" size={24} className="text-gray-400" />
-                <span className="text-lg">Следующее сканирование через:</span>
-              </div>
-              <div className="text-3xl font-bold text-[#0EA5E9]">{timeLeft}s</div>
+        <Card className="bg-white/5 border-white/10 p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Icon name="Clock" size={24} className="text-gray-400" />
+              <span className="text-lg">Следующее сканирование через:</span>
             </div>
-            <Progress value={(30 - timeLeft) / 30 * 100} className="mt-4 h-2" />
-          </Card>
-        )}
+            <div className="text-3xl font-bold text-[#0EA5E9]">{timeLeft}s</div>
+          </div>
+          <Progress value={(30 - timeLeft) / 30 * 100} className="mt-4 h-2" />
+        </Card>
 
         {/* Статистика событий */}
         <div className="grid grid-cols-2 gap-4">
@@ -693,15 +897,11 @@ const Index = () => {
               </div>
               <div className="flex justify-between">
                 <span className="text-[#0EA5E9]">Альфа:</span>
-                <span className="font-bold text-[#0EA5E9]">
-                  {stats.alpha} ({stats.total > 0 ? ((stats.alpha / stats.total) * 100).toFixed(1) : 0}%)
-                </span>
+                <span className="font-bold text-[#0EA5E9]">{stats.alpha} ({stats.total > 0 ? ((stats.alpha / stats.total) * 100).toFixed(1) : 0}%)</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-[#8B5CF6]">Омега:</span>
-                <span className="font-bold text-[#8B5CF6]">
-                  {stats.omega} ({stats.total > 0 ? ((stats.omega / stats.total) * 100).toFixed(1) : 0}%)
-                </span>
+                <span className="font-bold text-[#8B5CF6]">{stats.omega} ({stats.total > 0 ? ((stats.omega / stats.total) * 100).toFixed(1) : 0}%)</span>
               </div>
             </div>
           </Card>
@@ -714,7 +914,7 @@ const Index = () => {
               {history.slice(-10).reverse().map((event) => (
                 <Badge key={event.id} variant="outline"
                   className={`${event.column === 'alpha' ? 'border-[#0EA5E9] text-[#0EA5E9] bg-[#0EA5E9]/10' : 'border-[#8B5CF6] text-[#8B5CF6] bg-[#8B5CF6]/10'} text-xs`}>
-                  {event.column === 'alpha' ? 'α' : 'ω'}
+                  {event.column === 'alpha' ? 'α' : 'ω'}{event.source === 'screen' && '📹'}
                 </Badge>
               ))}
             </div>
@@ -736,9 +936,7 @@ const Index = () => {
             <div className="max-h-96 overflow-y-auto space-y-2">
               {history.slice().reverse().map((event, idx) => {
                 const eventNumber = history.length - idx;
-                const pred = predictionHistory.find(p =>
-                  Math.abs(p.timestamp.getTime() - event.timestamp.getTime()) < 2000
-                );
+                const pred = predictionHistory.find(p => Math.abs(p.timestamp.getTime() - event.timestamp.getTime()) < 2000);
                 return (
                   <div key={event.id} className={`p-3 rounded-lg border ${pred ? pred.isCorrect ? 'bg-green-500/10 border-green-500/30' : 'bg-red-500/10 border-red-500/30' : 'bg-white/5 border-white/10'}`}>
                     <div className="flex items-center justify-between">
@@ -750,7 +948,7 @@ const Index = () => {
                         {pred && (
                           <>
                             <Icon name="ArrowRight" size={16} className="text-gray-500" />
-                            <span className="text-xs text-gray-400">AI:</span>
+                            <span className="text-xs text-gray-400">Прогноз:</span>
                             <Badge className={`${pred.prediction === 'alpha' ? 'bg-[#0EA5E9]' : 'bg-[#8B5CF6]'} text-white border-none text-xs`}>
                               {pred.prediction === 'alpha' ? 'АЛЬФА' : 'ОМЕГА'}
                             </Badge>
@@ -760,7 +958,12 @@ const Index = () => {
                           </>
                         )}
                       </div>
-                      <span className="text-xs text-gray-500">{event.timestamp.toLocaleTimeString('ru-RU')}</span>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs border-white/20 text-gray-400">
+                          {event.source === 'screen' ? '📹 Авто' : '✋ Ручной'}
+                        </Badge>
+                        <span className="text-xs text-gray-500">{event.timestamp.toLocaleTimeString('ru-RU')}</span>
+                      </div>
                     </div>
                   </div>
                 );
@@ -769,7 +972,7 @@ const Index = () => {
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-gray-500">
               <Icon name="History" size={48} className="mb-4 opacity-30" />
-              <p>История пуста — запустите захват экрана</p>
+              <p>История пуста — запустите систему</p>
             </div>
           )}
         </Card>

@@ -16,21 +16,12 @@ export interface AlgorithmPrediction {
   weight: number;
 }
 
-export interface AIPrediction {
-  prediction: Column;
-  confidence: number;
-  reasoning: string[];
-  matchedPattern: string | null;       // найденный паттерн (символы), например "ωωωω"
-  nextPattern: Column[];               // ожидаемая последовательность из 5 значений
-  nextPatternConfidence: number;       // уверенность в nextPattern
-}
-
 export interface AccuracyPoint {
   timestamp: number;
   pattern: number;
   frequency: number;
-  entropy: number;
-  ai: number;
+  markov: number;
+  ensemble: number;
 }
 
 export interface CaptureArea {
@@ -66,4 +57,14 @@ export interface MethodStats {
   accuracy: number;
   avgConfidence: number;
   weight: number;
+}
+
+export interface AdaptiveWeights {
+  pattern: number;
+  frequency: number;
+  markov: number;
+  sequenceDepth: number;
+  nGram: number;
+  entropy: number;
+  streak: number;
 }
